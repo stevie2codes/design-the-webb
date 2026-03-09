@@ -1,0 +1,9 @@
+[build]
+  base = "webb-design"
+  command = "npm run build"
+  publish = "webb-design/dist"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
