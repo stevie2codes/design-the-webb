@@ -51,20 +51,17 @@ export default function BlueprintGrid({
         const maxX = w - rw - gridSize;
         const maxY = h - rh - gridSize;
 
-        // Bias placement toward edges so center text area stays clear
+        // Keep left-center clear for text; allow blocks on right for portrait merge
         let x: number, y: number;
-        const centerX = w / 2;
-        const centerY = h / 2;
-        const clearL = centerX - w * 0.3;
-        const clearR = centerX + w * 0.3;
-        const clearT = centerY - h * 0.18;
-        const clearB = centerY + h * 0.18;
+        const clearL = w * 0.08;
+        const clearR = w * 0.52;
+        const clearT = w > 768 ? h * 0.25 : h * 0.32;
+        const clearB = w > 768 ? h * 0.75 : h * 0.68;
         let attempts = 0;
         do {
           x = snapToGrid(p.random(gridSize, Math.max(gridSize, maxX)), 3);
           y = snapToGrid(p.random(gridSize, Math.max(gridSize, maxY)), 3);
           attempts++;
-          // Check if the rect's bounding box overlaps the center clear zone
         } while (
           attempts < 30 &&
           x + rw > clearL &&
@@ -138,7 +135,6 @@ export default function BlueprintGrid({
         }
 
         draw() {
-          // Fill
           if (this.fillAlpha > 0) {
             const fc = p.color(accentColor);
             fc.setAlpha(this.fillAlpha);
@@ -147,7 +143,6 @@ export default function BlueprintGrid({
             p.noFill();
           }
 
-          // Stroke
           const sc = p.color(accentColor);
           sc.setAlpha(this.strokeAlpha);
           p.stroke(sc);

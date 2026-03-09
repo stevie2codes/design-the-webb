@@ -48,60 +48,99 @@ export default function HomePage() {
     <>
       {/* ═══ HERO ═══ */}
       <section className="relative min-h-screen overflow-hidden">
+        {/* Layer 1: p5.js animated background */}
         <BlueprintGrid className="absolute inset-0 w-full h-full" />
 
-        <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-6 text-center">
-          <motion.p
-            className="text-xs font-medium tracking-[0.25em] uppercase text-orange mb-6"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-          >
-            Senior Product Designer
-          </motion.p>
+        {/* Layer 2: Content */}
+        <div className="relative z-10 flex items-end md:items-center min-h-screen px-6 md:px-12 pb-32 md:pb-0">
+          <div className="max-w-6xl mx-auto w-full flex items-center gap-12 lg:gap-16">
+            <div className="max-w-xl">
+              <motion.p
+                className="text-xs font-medium tracking-[0.25em] uppercase text-orange mb-5 md:mb-6"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.6, delay: 0.2 }}
+              >
+                Senior Product Designer
+              </motion.p>
 
-          <motion.h1
-            className="font-display text-6xl md:text-8xl lg:text-9xl text-dark leading-[1.05] mb-8 tracking-tight"
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.35 }}
-          >
-            Stephen
-            <br />
-            <span className="italic text-orange">Webb</span>
-          </motion.h1>
+              <h1 className="font-display text-dark tracking-tight">
+                <motion.span
+                  className="block text-[3.5rem] md:text-[5.5rem] lg:text-[7rem] xl:text-[8rem] leading-[0.9]"
+                  initial={{ opacity: 0, x: -40 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.8, delay: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                >
+                  Stephen
+                </motion.span>
+                <motion.span
+                  className="block text-[3.5rem] md:text-[5.5rem] lg:text-[7rem] xl:text-[8rem] leading-[0.9] italic text-orange"
+                  initial={{ opacity: 0, x: -40 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.8, delay: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                >
+                  Webb
+                </motion.span>
+              </h1>
 
-          <motion.p
-            className="max-w-md text-base text-muted leading-relaxed mb-12 font-light"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.55 }}
-          >
-            Designing AI-driven reporting tools that turn
-            <br />
-            complexity into clarity. Currently at Tyler Technologies.
-          </motion.p>
+              <motion.div
+                className="mt-8 md:mt-10"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.7, delay: 0.65 }}
+              >
+                <p className="text-lg text-muted leading-relaxed mb-8 max-w-sm">
+                  Product designer at Tyler Technologies.
+                  I make complex data feel obvious.
+                </p>
 
-          <motion.div
-            className="flex gap-4"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.7 }}
-          >
-            <a
-              href="#work"
-              className="group px-7 py-3 rounded-full bg-dark text-cream text-sm font-medium hover:bg-dark-soft transition-all"
+                <div className="flex gap-4">
+                  <a
+                    href="#work"
+                    className="group px-7 py-3 rounded-full bg-dark text-cream text-sm font-medium hover:bg-dark-soft transition-all"
+                  >
+                    View Work
+                    <ArrowUpRight className="inline-block ml-1.5 w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                  </a>
+                  <a
+                    href="#contact"
+                    className="px-7 py-3 rounded-full border border-dark/15 text-dark text-sm font-medium hover:border-dark/40 transition-colors"
+                  >
+                    Get in Touch
+                  </a>
+                </div>
+              </motion.div>
+            </div>
+
+            {/* Portrait frame — irregular glitch shape */}
+            <motion.div
+              className="hidden md:block flex-shrink-0"
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 1, delay: 0.6, ease: [0.22, 1, 0.36, 1] }}
             >
-              View Work
-              <ArrowUpRight className="inline-block ml-1.5 w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-            </a>
-            <a
-              href="#contact"
-              className="px-7 py-3 rounded-full border border-dark/15 text-dark text-sm font-medium hover:border-dark/40 transition-colors"
-            >
-              Get in Touch
-            </a>
-          </motion.div>
+              <div
+                className="w-[280px] lg:w-[320px] xl:w-[360px] aspect-[3/4]"
+                style={{
+                  clipPath: `polygon(
+                    2% 0%, 65% 0%, 65% 3%, 100% 3%, 100% 18%,
+                    95% 18%, 95% 25%, 100% 25%, 100% 62%,
+                    92% 62%, 92% 68%, 100% 68%, 100% 88%,
+                    70% 88%, 70% 100%, 8% 100%, 8% 95%,
+                    0% 95%, 0% 72%, 5% 72%, 5% 45%,
+                    0% 45%, 0% 12%, 6% 12%, 6% 5%, 2% 5%
+                  )`,
+                }}
+              >
+                <img
+                  src="/stephen-portrait.jpg"
+                  alt="Stephen Webb"
+                  className="w-full h-full object-cover object-top grayscale"
+                  draggable={false}
+                />
+              </div>
+            </motion.div>
+          </div>
         </div>
 
         {/* Scroll indicator */}
