@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import {
@@ -11,7 +12,7 @@ import {
   Linkedin,
   Twitter,
 } from "lucide-react";
-import FlowField from "../components/FlowField";
+import FlowField, { type FlowPhase } from "../components/FlowField";
 import Reveal from "../components/Reveal";
 import SectionLabel from "../components/SectionLabel";
 import { sideProjects } from "../data/projects";
@@ -44,17 +45,33 @@ const capabilities = [
 ];
 
 export default function HomePage() {
+  const [phase, setPhase] = useState<FlowPhase>("flowing");
+  const isRevealed = phase === "released";
+
   return (
     <>
+      {/* Hidden SVG for organic photo mask */}
+      <svg width="0" height="0" className="absolute">
+        <defs>
+          <clipPath id="organic-mask" clipPathUnits="objectBoundingBox">
+            <path d="M0.5,0.02 C0.75,0 0.98,0.08 0.97,0.25 C0.99,0.42 0.95,0.55 0.98,0.7 C1.0,0.82 0.92,0.95 0.75,0.98 C0.58,1.0 0.35,0.97 0.2,0.95 C0.05,0.93 0.0,0.82 0.02,0.65 C0.04,0.48 0.0,0.35 0.03,0.2 C0.06,0.05 0.25,0.02 0.5,0.02Z" />
+          </clipPath>
+        </defs>
+      </svg>
+
       {/* ═══ HERO ═══ */}
       <section className="relative min-h-screen overflow-hidden">
         {/* Flow field background */}
-        <FlowField className="absolute inset-0 w-full h-full" />
+        <FlowField
+          className="absolute inset-0 w-full h-full"
+          onPhaseChange={setPhase}
+        />
 
-        {/* Text content */}
-        <div className="relative z-10 flex items-end md:items-center min-h-screen px-6 md:px-12 pb-32 md:pb-0">
-          <div className="max-w-6xl mx-auto w-full">
-            <div className="max-w-xl">
+        {/* Split layout content */}
+        <div className="relative z-10 flex items-center min-h-screen px-6 md:px-12 pt-28 pb-12 md:pt-0 md:pb-0">
+          <div className="max-w-6xl mx-auto w-full flex flex-col md:flex-row items-start md:items-center gap-10 lg:gap-20">
+            {/* Left column — text */}
+            <div className="flex-1 max-w-xl">
               <motion.p
                 className="text-xs font-medium tracking-[0.25em] uppercase text-orange mb-5 md:mb-6"
                 initial={{ opacity: 0, x: -20 }}
@@ -64,30 +81,25 @@ export default function HomePage() {
                 Senior Product Designer
               </motion.p>
 
-              <h1 className="font-display text-dark tracking-tight">
-                <motion.span
-                  className="block text-[3.5rem] md:text-[5.5rem] lg:text-[7rem] xl:text-[8rem] leading-[0.9]"
-                  initial={{ opacity: 0, x: -40 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.8, delay: 0.35, ease: [0.22, 1, 0.36, 1] }}
-                >
+              <motion.h1
+                className="font-display text-dark tracking-tight"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: isRevealed ? 1 : 0 }}
+                transition={{ duration: 0.6 }}
+              >
+                <span className="block text-[3.5rem] md:text-[5.5rem] lg:text-[7rem] xl:text-[8rem] leading-[0.9]">
                   Stephen
-                </motion.span>
-                <motion.span
-                  className="block text-[3.5rem] md:text-[5.5rem] lg:text-[7rem] xl:text-[8rem] leading-[0.9] italic text-orange"
-                  initial={{ opacity: 0, x: -40 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.8, delay: 0.5, ease: [0.22, 1, 0.36, 1] }}
-                >
+                </span>
+                <span className="block text-[3.5rem] md:text-[5.5rem] lg:text-[7rem] xl:text-[8rem] leading-[0.9]">
                   Webb
-                </motion.span>
-              </h1>
+                </span>
+              </motion.h1>
 
               <motion.div
                 className="mt-8 md:mt-10"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.7, delay: 0.65 }}
+                transition={{ duration: 0.7, delay: 0.3 }}
               >
                 <p className="text-lg text-muted leading-relaxed mb-8 max-w-sm">
                   Product designer at Tyler Technologies.
@@ -111,6 +123,24 @@ export default function HomePage() {
                 </div>
               </motion.div>
             </div>
+
+            {/* Right column — portrait photo */}
+            <motion.div
+              className="flex-shrink-0"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{
+                opacity: isRevealed ? 1 : 0,
+                scale: isRevealed ? 1 : 0.95,
+              }}
+              transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <div
+                className="w-[220px] md:w-[280px] lg:w-[320px] xl:w-[360px] aspect-[3/4] bg-gradient-to-br from-cream-dark to-line flex items-center justify-center text-muted text-sm"
+                style={{ clipPath: "url(#organic-mask)" }}
+              >
+                {/* Replace with <img src="/your-photo.jpg" alt="Stephen Webb" className="w-full h-full object-cover object-top" /> when ready */}
+              </div>
+            </motion.div>
           </div>
         </div>
 
@@ -144,7 +174,7 @@ export default function HomePage() {
             <Reveal className="md:col-span-6" delay={0.1}>
               <h2 className="font-display text-4xl md:text-5xl lg:text-6xl leading-[1.1] tracking-tight">
                 I design products where{" "}
-                <span className="italic text-orange">data meets decisions</span>
+                <span className="text-orange">data meets decisions</span>
               </h2>
             </Reveal>
 
@@ -276,7 +306,7 @@ export default function HomePage() {
           <Reveal delay={0.1}>
             <h2 className="font-display text-4xl md:text-5xl lg:text-6xl leading-[1.1] mb-24 lg:mb-32 tracking-tight max-w-3xl">
               Thoughtful craft across the{" "}
-              <span className="italic text-orange">full product surface</span>
+              <span className="text-orange">full product surface</span>
             </h2>
           </Reveal>
 
@@ -314,7 +344,7 @@ export default function HomePage() {
             <h2 className="font-display text-5xl md:text-7xl lg:text-8xl leading-[0.95] mb-10 tracking-tight">
               Let's build something
               <br />
-              <span className="italic text-orange">worth using</span>
+              <span className="text-orange">worth using</span>
             </h2>
           </Reveal>
 
