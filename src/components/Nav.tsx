@@ -9,7 +9,7 @@ function MagneticLink({
   children,
   className,
   ...props
-}: React.AnchorHTMLAttributes<HTMLAnchorElement> & { children: React.ReactNode }) {
+}: React.ComponentProps<typeof motion.a>) {
   const ref = useRef<HTMLAnchorElement>(null);
   const x = useMotionValue(0);
   const y = useMotionValue(0);
@@ -44,11 +44,7 @@ function MagneticRouterLink({
   children,
   className,
   to,
-  ...props
-}: { children: React.ReactNode; className?: string; to: string } & Omit<
-  React.AnchorHTMLAttributes<HTMLAnchorElement>,
-  "href"
->) {
+}: { children: React.ReactNode; className?: string; to: string }) {
   const ref = useRef<HTMLAnchorElement>(null);
   const x = useMotionValue(0);
   const y = useMotionValue(0);
@@ -71,7 +67,7 @@ function MagneticRouterLink({
         y.set(0);
       }}
     >
-      <Link ref={ref} to={to} className={className} {...props}>
+      <Link ref={ref} to={to} className={className}>
         {children}
       </Link>
     </motion.div>
