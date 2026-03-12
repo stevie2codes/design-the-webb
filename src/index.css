@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @theme {
-  --font-display: 'Instrument Serif', Georgia, serif;
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
   --font-body: 'DM Sans', system-ui, sans-serif;
   --color-cream: #faf9f5;
   --color-cream-dark: #f0ede5;
