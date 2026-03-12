@@ -247,14 +247,14 @@ export default function Nav() {
               {isHome ? (
                 <MagneticLink
                   href="#contact"
-                  className="ml-2 px-5 py-2 rounded-full bg-dark text-cream text-sm hover:bg-dark-soft transition-colors"
+                  className="ml-2 px-5 py-2 rounded-lg bg-dark text-cream text-sm hover:bg-dark-soft hover:-translate-y-0.5 hover:shadow-lg hover:shadow-dark/10 transition-all duration-300"
                 >
                   Contact
                 </MagneticLink>
               ) : (
                 <MagneticRouterLink
                   to="/#contact"
-                  className="ml-2 px-5 py-2 rounded-full bg-dark text-cream text-sm hover:bg-dark-soft transition-colors"
+                  className="ml-2 px-5 py-2 rounded-lg bg-dark text-cream text-sm hover:bg-dark-soft hover:-translate-y-0.5 hover:shadow-lg hover:shadow-dark/10 transition-all duration-300"
                 >
                   Contact
                 </MagneticRouterLink>

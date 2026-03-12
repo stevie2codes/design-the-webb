@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import {
@@ -47,8 +47,6 @@ const capabilities = [
 
 export default function HomePage() {
   const [scrambleDone, setScrambleDone] = useState(false);
-  const heroRef = useRef<HTMLElement>(null);
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
   const taglineWords = ["Product", "designer", "at", "Tyler", "Technologies."];
   const taglineWords2 = ["I", "make", "complex", "data", "feel", "obvious."];
@@ -56,24 +54,7 @@ export default function HomePage() {
   return (
     <>
       {/* ═══ HERO ═══ */}
-      <section
-        ref={heroRef}
-        className="relative min-h-screen overflow-hidden"
-        onMouseMove={(e) => {
-          const rect = heroRef.current?.getBoundingClientRect();
-          if (rect) {
-            setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-          }
-        }}
-      >
-        {/* Mouse-reactive radial glow */}
-        <div
-          className="pointer-events-none absolute inset-0 transition-opacity duration-300"
-          style={{
-            background: `radial-gradient(600px circle at ${mousePos.x}px ${mousePos.y}px, rgba(217,119,87,0.15), transparent 60%)`,
-          }}
-        />
-
+      <section className="relative min-h-screen overflow-hidden">
         {/* Split layout content */}
         <div className="flex items-center min-h-screen px-6 md:px-12 pt-28 pb-12 md:pt-0 md:pb-0">
           <div className="max-w-6xl mx-auto w-full flex flex-col md:flex-row items-start md:items-center gap-10 lg:gap-20">
@@ -160,14 +141,14 @@ export default function HomePage() {
                 >
                   <a
                     href="#work"
-                    className="group px-7 py-3 rounded-full bg-dark text-cream text-sm font-medium hover:bg-dark-soft transition-all"
+                    className="group px-7 py-3 rounded-lg bg-dark text-cream text-sm font-medium hover:bg-dark-soft hover:-translate-y-0.5 hover:shadow-lg hover:shadow-dark/10 transition-all duration-300"
                   >
                     View Work
                     <ArrowUpRight className="inline-block ml-1.5 w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                   </a>
                   <a
                     href="#contact"
-                    className="px-7 py-3 rounded-full border border-dark/15 text-dark text-sm font-medium hover:border-dark/40 transition-colors"
+                    className="px-7 py-3 rounded-lg border border-dark/15 text-dark text-sm font-medium hover:border-dark/40 hover:-translate-y-0.5 transition-all duration-300"
                   >
                     Get in Touch
                   </a>
@@ -414,7 +395,7 @@ export default function HomePage() {
           <Reveal delay={0.3}>
             <a
               href="mailto:stephen@designthewebb.com"
-              className="group inline-flex items-center gap-2 px-10 py-4 rounded-full bg-dark text-cream font-medium hover:bg-dark-soft transition-colors"
+              className="group inline-flex items-center gap-2 px-10 py-4 rounded-lg bg-dark text-cream font-medium hover:bg-dark-soft hover:-translate-y-0.5 hover:shadow-lg hover:shadow-dark/10 transition-all duration-300"
             >
               <Mail className="w-4 h-4" />
               stephen@designthewebb.com
