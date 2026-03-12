@@ -22,10 +22,15 @@ const BG_FADE = "rgba(250, 249, 245, 0.06)";
 const BG_FILL = "#faf9f5";
 const MOUSE_RADIUS = 250;
 
-// Phase timing (ms)
-const PHASE_FLOWING_END = 500;
-const PHASE_CONVERGING_END = 2000;
-const PHASE_SHIMMERING_END = 2500;
+// Phase timing (ms) — longer for smoother transitions
+const PHASE_FLOWING_END = 800;
+const PHASE_CONVERGING_END = 2800;
+const PHASE_SHIMMERING_END = 3400;
+const RELEASE_DURATION = 800; // gradual release transition
+
+function easeInOutCubic(t: number): number {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
 
 export default function FlowField({
   className,
@@ -68,6 +73,11 @@ export default function FlowField({
         color: (typeof COLORS)[number];
         life: number;
         maxLife: number;
+        // Convergence: captured when convergence starts
+        convergeStartX: number;
+        convergeStartY: number;
+        staggerOffset: number; // 0-0.3, distance-based delay
+        hasConvergeStart: boolean;
       }
 
       const particles: Particle[] = [];
@@ -206,6 +216,10 @@ export default function FlowField({
           color: c,
           life: 0,
           maxLife: 80 + Math.random() * 160,
+          convergeStartX: 0,
+          convergeStartY: 0,
+          staggerOffset: 0,
+          hasConvergeStart: false,
         };
       }
 
@@ -284,55 +298,103 @@ export default function FlowField({
               ? 1
               : 0;
 
+        // Release transition: gradual fade from attractor hold to flow
+        const releaseT =
+          phase === "released"
+            ? Math.min(1, (elapsed - PHASE_SHIMMERING_END) / RELEASE_DURATION)
+            : 0;
+        const releaseEased = easeInOutCubic(releaseT);
+
         for (let i = 0; i < particles.length; i++) {
           const particle = particles[i];
           particle.px = particle.x;
           particle.py = particle.y;
 
-          if (
-            phase === "converging" &&
-            particleAttractorIdx[i] >= 0
-          ) {
-            // Steer toward attractor with increasing strength
+          const hasAttractor = particleAttractorIdx[i] >= 0;
+
+          if (phase === "converging" && hasAttractor) {
             const target = attractorPoints[particleAttractorIdx[i]];
+
+            // Capture start position once at convergence start
+            if (!particle.hasConvergeStart) {
+              particle.convergeStartX = particle.x;
+              particle.convergeStartY = particle.y;
+              particle.hasConvergeStart = true;
+              // Distance-based stagger: far particles start later
+              const dx = target.x - particle.x;
+              const dy = target.y - particle.y;
+              const dist = Math.sqrt(dx * dx + dy * dy);
+              particle.staggerOffset = Math.min(
+                0.3,
+                (dist / (W * 0.5)) * 0.3
+              );
+            }
+
+            // Staggered + eased progress: near particles lead, far ones follow
+            const staggered = Math.max(
+              0,
+              (convergeProgress - particle.staggerOffset) /
+                (1 - particle.staggerOffset)
+            );
+            const eased = easeInOutCubic(Math.min(1, staggered));
+
+            // Absolute interpolation: start → target with easing
+            particle.x =
+              particle.convergeStartX +
+              (target.x - particle.convergeStartX) * eased;
+            particle.y =
+              particle.convergeStartY +
+              (target.y - particle.convergeStartY) * eased;
+
+            // Smooth alpha boost
+            particle.alpha = particle.baseAlpha + eased * 0.15;
+          } else if (phase === "shimmering" && hasAttractor) {
+            const target = attractorPoints[particleAttractorIdx[i]];
+
+            // Smooth sine oscillation instead of random jitter
+            const shimmerT = elapsed * 0.006;
+            const ox = Math.sin(shimmerT + i * 0.7) * 1.5;
+            const oy = Math.cos(shimmerT * 1.3 + i * 0.5) * 1.5;
+            particle.x = target.x + ox;
+            particle.y = target.y + oy;
+            particle.alpha = particle.baseAlpha + 0.15;
+          } else if (
+            phase === "released" &&
+            releaseT < 1 &&
+            hasAttractor &&
+            particle.hasConvergeStart
+          ) {
+            // Gradual release: blend from attractor hold into flow field
+            const target = attractorPoints[particleAttractorIdx[i]];
+            const angle = flowAngle(particle.x, particle.y, time);
+            const flowX = Math.cos(angle) * particle.speed;
+            const flowY = Math.sin(angle) * particle.speed;
+
+            // Diminishing hold toward attractor
+            const holdStrength = 1 - releaseEased;
             const dx = target.x - particle.x;
             const dy = target.y - particle.y;
-            const lerpStrength = convergeProgress * 0.12;
-            particle.x += dx * lerpStrength;
-            particle.y += dy * lerpStrength;
-            // Boost alpha as they converge to make text brighter
+            particle.x += dx * 0.08 * holdStrength + flowX * releaseEased;
+            particle.y += dy * 0.08 * holdStrength + flowY * releaseEased;
+
             particle.alpha =
-              particle.baseAlpha + convergeProgress * 0.15;
-          } else if (
-            phase === "shimmering" &&
-            particleAttractorIdx[i] >= 0
-          ) {
-            // Hold at attractor with small jitter
-            const target = attractorPoints[particleAttractorIdx[i]];
-            particle.x = target.x + (Math.random() - 0.5) * 3;
-            particle.y = target.y + (Math.random() - 0.5) * 3;
-            particle.alpha = particle.baseAlpha + 0.18;
+              particle.baseAlpha + 0.12 * holdStrength;
+            particle.life++;
           } else {
-            // Normal flow (flowing + released phases)
+            // Normal flow (flowing phase + fully released)
             const angle = flowAngle(particle.x, particle.y, time);
             particle.x += Math.cos(angle) * particle.speed;
             particle.y += Math.sin(angle) * particle.speed;
             particle.life++;
+            particle.alpha = particle.baseAlpha;
 
-            // Brief alpha spike on release
-            if (
-              phase === "released" &&
-              elapsed < PHASE_SHIMMERING_END + 300
-            ) {
-              particle.alpha = particle.baseAlpha + 0.1;
-            } else {
-              particle.alpha = particle.baseAlpha;
-            }
+            // Clear convergence state for respawned particles
+            particle.hasConvergeStart = false;
           }
 
           // Life-based fade (only in flow modes)
           let lifeAlpha = 1;
-          if (phase === "flowing" || phase === "released") {
+          if (phase === "flowing" || (phase === "released" && releaseT >= 1)) {
             if (particle.life < 15) lifeAlpha = particle.life / 15;
             else if (particle.life > particle.maxLife - 25)
               lifeAlpha = Math.max(
@@ -342,7 +404,7 @@ export default function FlowField({
           }
 
           // Respawn if off-screen or expired (only in flow modes)
-          if (phase === "flowing" || phase === "released") {
+          if (phase === "flowing" || (phase === "released" && releaseT >= 1)) {
             if (
               particle.x < -30 ||
               particle.x > W + 30 ||
