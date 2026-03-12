@@ -51,7 +51,7 @@ export default function BlueprintGrid({
         const maxX = w - rw - gridSize;
         const maxY = h - rh - gridSize;
 
-        // Keep left-center clear for text; allow blocks on right for portrait merge
+        // Keep left-center clear for text
         let x: number, y: number;
         const clearL = w * 0.08;
         const clearR = w * 0.52;

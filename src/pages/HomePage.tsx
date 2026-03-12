@@ -51,9 +51,9 @@ export default function HomePage() {
         {/* Layer 1: p5.js animated background */}
         <BlueprintGrid className="absolute inset-0 w-full h-full" />
 
-        {/* Layer 2: Content */}
+        {/* Layer 3: Text content */}
         <div className="relative z-10 flex items-end md:items-center min-h-screen px-6 md:px-12 pb-32 md:pb-0">
-          <div className="max-w-6xl mx-auto w-full flex items-center gap-12 lg:gap-16">
+          <div className="max-w-6xl mx-auto w-full">
             <div className="max-w-xl">
               <motion.p
                 className="text-xs font-medium tracking-[0.25em] uppercase text-orange mb-5 md:mb-6"
@@ -111,35 +111,6 @@ export default function HomePage() {
                 </div>
               </motion.div>
             </div>
-
-            {/* Portrait frame — irregular glitch shape */}
-            <motion.div
-              className="hidden md:block flex-shrink-0"
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 1, delay: 0.6, ease: [0.22, 1, 0.36, 1] }}
-            >
-              <div
-                className="w-[280px] lg:w-[320px] xl:w-[360px] aspect-[3/4]"
-                style={{
-                  clipPath: `polygon(
-                    2% 0%, 65% 0%, 65% 3%, 100% 3%, 100% 18%,
-                    95% 18%, 95% 25%, 100% 25%, 100% 62%,
-                    92% 62%, 92% 68%, 100% 68%, 100% 88%,
-                    70% 88%, 70% 100%, 8% 100%, 8% 95%,
-                    0% 95%, 0% 72%, 5% 72%, 5% 45%,
-                    0% 45%, 0% 12%, 6% 12%, 6% 5%, 2% 5%
-                  )`,
-                }}
-              >
-                <img
-                  src="/stephen-portrait.jpg"
-                  alt="Stephen Webb"
-                  className="w-full h-full object-cover object-top grayscale"
-                  draggable={false}
-                />
-              </div>
-            </motion.div>
           </div>
         </div>
 
