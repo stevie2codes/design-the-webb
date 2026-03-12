@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import {
@@ -12,10 +12,11 @@ import {
   Linkedin,
   Twitter,
 } from "lucide-react";
-import FlowField, { type FlowPhase } from "../components/FlowField";
 import Reveal from "../components/Reveal";
+import ScrambleText from "../components/ScrambleText";
 import SectionLabel from "../components/SectionLabel";
 import { sideProjects } from "../data/projects";
+import HeroIllustration from "../components/HeroIllustration";
 
 const capabilities = [
   {
@@ -45,30 +46,36 @@ const capabilities = [
 ];
 
 export default function HomePage() {
-  const [phase, setPhase] = useState<FlowPhase>("flowing");
-  const isRevealed = phase === "released";
+  const [scrambleDone, setScrambleDone] = useState(false);
+  const heroRef = useRef<HTMLElement>(null);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+
+  const taglineWords = ["Product", "designer", "at", "Tyler", "Technologies."];
+  const taglineWords2 = ["I", "make", "complex", "data", "feel", "obvious."];
 
   return (
     <>
-      {/* Hidden SVG for organic photo mask */}
-      <svg width="0" height="0" className="absolute">
-        <defs>
-          <clipPath id="organic-mask" clipPathUnits="objectBoundingBox">
-            <path d="M0.5,0.02 C0.75,0 0.98,0.08 0.97,0.25 C0.99,0.42 0.95,0.55 0.98,0.7 C1.0,0.82 0.92,0.95 0.75,0.98 C0.58,1.0 0.35,0.97 0.2,0.95 C0.05,0.93 0.0,0.82 0.02,0.65 C0.04,0.48 0.0,0.35 0.03,0.2 C0.06,0.05 0.25,0.02 0.5,0.02Z" />
-          </clipPath>
-        </defs>
-      </svg>
-
       {/* ═══ HERO ═══ */}
-      <section className="relative min-h-screen overflow-hidden">
-        {/* Flow field background */}
-        <FlowField
-          className="absolute inset-0 w-full h-full"
-          onPhaseChange={setPhase}
+      <section
+        ref={heroRef}
+        className="relative min-h-screen overflow-hidden"
+        onMouseMove={(e) => {
+          const rect = heroRef.current?.getBoundingClientRect();
+          if (rect) {
+            setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+          }
+        }}
+      >
+        {/* Mouse-reactive radial glow */}
+        <div
+          className="pointer-events-none absolute inset-0 transition-opacity duration-300"
+          style={{
+            background: `radial-gradient(600px circle at ${mousePos.x}px ${mousePos.y}px, rgba(217,119,87,0.15), transparent 60%)`,
+          }}
         />
 
         {/* Split layout content */}
-        <div className="relative z-10 flex items-center min-h-screen px-6 md:px-12 pt-28 pb-12 md:pt-0 md:pb-0">
+        <div className="flex items-center min-h-screen px-6 md:px-12 pt-28 pb-12 md:pt-0 md:pb-0">
           <div className="max-w-6xl mx-auto w-full flex flex-col md:flex-row items-start md:items-center gap-10 lg:gap-20">
             {/* Left column — text */}
             <div className="flex-1 max-w-xl">
@@ -81,32 +88,76 @@ export default function HomePage() {
                 Senior Product Designer
               </motion.p>
 
-              <motion.h1
-                className="font-display text-dark tracking-tight"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: isRevealed ? 1 : 0 }}
-                transition={{ duration: 0.6 }}
-              >
+              <h1 className="font-display text-dark tracking-tight">
                 <span className="block text-[3.5rem] md:text-[5.5rem] lg:text-[7rem] xl:text-[8rem] leading-[0.9]">
-                  Stephen
+                  <ScrambleText text="Stephen" delay={500} speed={120} />
                 </span>
                 <span className="block text-[3.5rem] md:text-[5.5rem] lg:text-[7rem] xl:text-[8rem] leading-[0.9]">
-                  Webb
+                  <ScrambleText
+                    text="Webb"
+                    delay={900}
+                    speed={140}
+                    onComplete={() => setScrambleDone(true)}
+                  />
                 </span>
-              </motion.h1>
+              </h1>
 
+              {/* Animated underline */}
               <motion.div
-                className="mt-8 md:mt-10"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.7, delay: 0.3 }}
-              >
-                <p className="text-lg text-muted leading-relaxed mb-8 max-w-sm">
-                  Product designer at Tyler Technologies.
-                  I make complex data feel obvious.
+                className="h-[2px] bg-gradient-to-r from-orange to-orange/30 mt-3 origin-left"
+                initial={{ scaleX: 0 }}
+                animate={scrambleDone ? { scaleX: 1 } : {}}
+                transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+              />
+
+              {/* Staggered tagline */}
+              <div className="mt-8 md:mt-10">
+                <p className="text-lg text-muted leading-relaxed max-w-sm">
+                  {taglineWords.map((word, i) => (
+                    <motion.span
+                      key={`t1-${i}`}
+                      className="inline-block mr-[0.3em]"
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={scrambleDone ? { opacity: 1, y: 0 } : {}}
+                      transition={{
+                        duration: 0.4,
+                        delay: i * 0.06,
+                        ease: "easeOut",
+                      }}
+                    >
+                      {word}
+                    </motion.span>
+                  ))}
+                  <br />
+                  {taglineWords2.map((word, i) => (
+                    <motion.span
+                      key={`t2-${i}`}
+                      className="inline-block mr-[0.3em]"
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={scrambleDone ? { opacity: 1, y: 0 } : {}}
+                      transition={{
+                        duration: 0.4,
+                        delay: taglineWords.length * 0.06 + i * 0.06,
+                        ease: "easeOut",
+                      }}
+                    >
+                      {word}
+                    </motion.span>
+                  ))}
                 </p>
 
-                <div className="flex gap-4">
+                {/* CTAs — fade in after tagline */}
+                <motion.div
+                  className="flex gap-4 mt-8"
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={scrambleDone ? { opacity: 1, y: 0 } : {}}
+                  transition={{
+                    duration: 0.5,
+                    delay:
+                      (taglineWords.length + taglineWords2.length) * 0.06 + 0.1,
+                    ease: "easeOut",
+                  }}
+                >
                   <a
                     href="#work"
                     className="group px-7 py-3 rounded-full bg-dark text-cream text-sm font-medium hover:bg-dark-soft transition-all"
@@ -120,26 +171,28 @@ export default function HomePage() {
                   >
                     Get in Touch
                   </a>
-                </div>
-              </motion.div>
+                </motion.div>
+              </div>
             </div>
 
-            {/* Right column — portrait photo */}
+            {/* Right column — illustration */}
             <motion.div
-              className="flex-shrink-0"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{
-                opacity: isRevealed ? 1 : 0,
-                scale: isRevealed ? 1 : 0.95,
-              }}
-              transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+              className="hidden md:flex flex-1 items-center justify-center"
+              initial={{ opacity: 0, x: 40 }}
+              animate={scrambleDone ? { opacity: 1, x: 0 } : {}}
+              transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
             >
-              <div
-                className="w-[220px] md:w-[280px] lg:w-[320px] xl:w-[360px] aspect-[3/4] bg-gradient-to-br from-cream-dark to-line flex items-center justify-center text-muted text-sm"
-                style={{ clipPath: "url(#organic-mask)" }}
+              <motion.div
+                className="w-full max-w-md lg:max-w-lg xl:max-w-xl"
+                animate={{ y: [0, -8, 0] }}
+                transition={{
+                  duration: 4,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                }}
               >
-                {/* Replace with <img src="/your-photo.jpg" alt="Stephen Webb" className="w-full h-full object-cover object-top" /> when ready */}
-              </div>
+                <HeroIllustration className="w-full h-auto" />
+              </motion.div>
             </motion.div>
           </div>
         </div>
@@ -148,8 +201,11 @@ export default function HomePage() {
         <motion.div
           className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2"
           initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1.2, duration: 0.6 }}
+          animate={scrambleDone ? { opacity: 1 } : {}}
+          transition={{
+            delay: (taglineWords.length + taglineWords2.length) * 0.06 + 0.4,
+            duration: 0.6,
+          }}
         >
           <span className="text-[10px] tracking-[0.15em] uppercase text-muted">
             Scroll

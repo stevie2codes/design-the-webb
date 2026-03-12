@@ -6,7 +6,7 @@ export default function Footer() {
           &copy; {new Date().getFullYear()} Stephen Webb. Designed with care.
         </span>
         <span className="text-xs text-muted/50">
-          Built with React + p5.js
+          Built with React + Tailwind
         </span>
       </div>
     </footer>
