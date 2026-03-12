@@ -11,6 +11,7 @@ import {
   Linkedin,
   Twitter,
 } from "lucide-react";
+import FlowField from "../components/FlowField";
 import Reveal from "../components/Reveal";
 import SectionLabel from "../components/SectionLabel";
 import { sideProjects } from "../data/projects";
@@ -47,6 +48,9 @@ export default function HomePage() {
     <>
       {/* ═══ HERO ═══ */}
       <section className="relative min-h-screen overflow-hidden">
+        {/* Flow field background */}
+        <FlowField className="absolute inset-0 w-full h-full" />
+
         {/* Text content */}
         <div className="relative z-10 flex items-end md:items-center min-h-screen px-6 md:px-12 pb-32 md:pb-0">
           <div className="max-w-6xl mx-auto w-full">
