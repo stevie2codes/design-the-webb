@@ -49,18 +49,34 @@ interface ConstellationNode {
 }
 
 function createNode(i: number, W: number, H: number): ConstellationNode {
-  const biasedX = 0.4 + Math.random() * 0.6;
-  let x = biasedX * W;
-  let y = Math.random() * H;
-  let homeX = x;
+  const isMobile = W < 768;
+
+  // Desktop: bias right 60%. Mobile: spread across but bias toward bottom half.
+  let x: number;
+  let y: number;
   let opacity = 0;
 
-  // Some stray faint nodes on the left for organic feel
-  if (Math.random() < 0.12) {
-    x = Math.random() * 0.4 * W;
-    homeX = x;
-    opacity = 0.15 + Math.random() * 0.2;
+  if (isMobile) {
+    x = Math.random() * W;
+    // Bias toward bottom 60% so text area up top stays clear
+    y = (0.4 + Math.random() * 0.6) * H;
+    // Faint out the top-drifting nodes
+    if (Math.random() < 0.15) {
+      y = Math.random() * 0.4 * H;
+      opacity = 0.1 + Math.random() * 0.15;
+    }
+  } else {
+    const biasedX = 0.4 + Math.random() * 0.6;
+    x = biasedX * W;
+    y = Math.random() * H;
+    // Some stray faint nodes on the left for organic feel
+    if (Math.random() < 0.12) {
+      x = Math.random() * 0.4 * W;
+      opacity = 0.15 + Math.random() * 0.2;
+    }
   }
+
+  let homeX = x;
 
   const isAccent = Math.random() < 0.15;
   const radius = isAccent ? 4 + Math.random() * 3 : 2 + Math.random() * 2;
@@ -309,7 +325,8 @@ export default function DataConstellation() {
     function init() {
       resize();
       nodes = [];
-      for (let i = 0; i < NODE_COUNT; i++) {
+      const count = W < 768 ? 100 : NODE_COUNT; // fewer nodes on mobile
+      for (let i = 0; i < count; i++) {
         nodes.push(createNode(i, W, H));
       }
     }

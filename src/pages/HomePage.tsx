@@ -58,17 +58,25 @@ export default function HomePage() {
         {/* Full-bleed canvas background */}
         <DataConstellation />
 
-        {/* Gradient shield — keeps text legible over the constellation */}
+        {/* Gradient shield — diagonal on desktop, vertical fade on mobile */}
         <div
-          className="absolute inset-0 z-[1] pointer-events-none"
+          className="absolute inset-0 z-[1] pointer-events-none hidden md:block"
           style={{
             background:
               "linear-gradient(105deg, #faf9f5 0%, #faf9f5 28%, rgba(250,249,245,0.92) 35%, rgba(250,249,245,0.7) 45%, rgba(250,249,245,0.3) 55%, rgba(250,249,245,0) 65%)",
           }}
         />
+        {/* Mobile: strong top coverage fading into constellation at bottom */}
+        <div
+          className="absolute inset-0 z-[1] pointer-events-none md:hidden"
+          style={{
+            background:
+              "linear-gradient(180deg, #faf9f5 0%, rgba(250,249,245,0.95) 50%, rgba(250,249,245,0.6) 75%, rgba(250,249,245,0.2) 90%, rgba(250,249,245,0) 100%)",
+          }}
+        />
 
         {/* Text content floats above canvas */}
-        <div className="relative z-[2] flex items-center min-h-screen px-6 md:px-12 pt-28 pb-12 md:pt-0 md:pb-0 pointer-events-none">
+        <div className="relative z-[2] flex items-end md:items-center min-h-screen px-6 md:px-12 pt-24 pb-28 md:pt-0 md:pb-0 pointer-events-none">
           <div className="max-w-6xl mx-auto w-full">
             <div className="max-w-xl">
               <motion.p
@@ -140,7 +148,7 @@ export default function HomePage() {
 
                 {/* CTAs — re-enable pointer events for interactive elements */}
                 <motion.div
-                  className="flex gap-4 mt-8 pointer-events-auto"
+                  className="flex flex-col sm:flex-row gap-3 sm:gap-4 mt-8 pointer-events-auto"
                   initial={{ opacity: 0, y: 16 }}
                   animate={scrambleDone ? { opacity: 1, y: 0 } : {}}
                   transition={{
@@ -152,14 +160,14 @@ export default function HomePage() {
                 >
                   <a
                     href="#work"
-                    className="group px-7 py-3 rounded-lg bg-dark text-cream text-sm font-medium hover:bg-dark-soft hover:-translate-y-0.5 hover:shadow-lg hover:shadow-dark/10 transition-all duration-300"
+                    className="group w-fit px-7 py-3 rounded-lg bg-dark text-cream text-sm font-medium hover:bg-dark-soft hover:-translate-y-0.5 hover:shadow-lg hover:shadow-dark/10 transition-all duration-300"
                   >
                     View Work
                     <ArrowUpRight className="inline-block ml-1.5 w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                   </a>
                   <a
                     href="#contact"
-                    className="px-7 py-3 rounded-lg border border-dark/15 text-dark text-sm font-medium hover:border-dark/40 hover:-translate-y-0.5 transition-all duration-300"
+                    className="w-fit px-7 py-3 rounded-lg border border-dark/15 text-dark text-sm font-medium hover:border-dark/40 hover:-translate-y-0.5 transition-all duration-300"
                   >
                     Get in Touch
                   </a>
