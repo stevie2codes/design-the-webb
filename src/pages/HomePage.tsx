@@ -16,7 +16,7 @@ import Reveal from "../components/Reveal";
 import ScrambleText from "../components/ScrambleText";
 import SectionLabel from "../components/SectionLabel";
 import { sideProjects } from "../data/projects";
-import HeroIllustration from "../components/HeroIllustration";
+import DataConstellation from "../components/DataConstellation";
 
 const capabilities = [
   {
@@ -55,11 +55,22 @@ export default function HomePage() {
     <>
       {/* ═══ HERO ═══ */}
       <section className="relative min-h-screen overflow-hidden">
-        {/* Split layout content */}
-        <div className="flex items-center min-h-screen px-6 md:px-12 pt-28 pb-12 md:pt-0 md:pb-0">
-          <div className="max-w-6xl mx-auto w-full flex flex-col md:flex-row items-start md:items-center gap-10 lg:gap-20">
-            {/* Left column — text */}
-            <div className="flex-1 max-w-xl">
+        {/* Full-bleed canvas background */}
+        <DataConstellation />
+
+        {/* Gradient shield — keeps text legible over the constellation */}
+        <div
+          className="absolute inset-0 z-[1] pointer-events-none"
+          style={{
+            background:
+              "linear-gradient(105deg, #faf9f5 0%, #faf9f5 28%, rgba(250,249,245,0.92) 35%, rgba(250,249,245,0.7) 45%, rgba(250,249,245,0.3) 55%, rgba(250,249,245,0) 65%)",
+          }}
+        />
+
+        {/* Text content floats above canvas */}
+        <div className="relative z-[2] flex items-center min-h-screen px-6 md:px-12 pt-28 pb-12 md:pt-0 md:pb-0 pointer-events-none">
+          <div className="max-w-6xl mx-auto w-full">
+            <div className="max-w-xl">
               <motion.p
                 className="text-xs font-medium tracking-[0.25em] uppercase text-orange mb-5 md:mb-6"
                 initial={{ opacity: 0, x: -20 }}
@@ -127,9 +138,9 @@ export default function HomePage() {
                   ))}
                 </p>
 
-                {/* CTAs — fade in after tagline */}
+                {/* CTAs — re-enable pointer events for interactive elements */}
                 <motion.div
-                  className="flex gap-4 mt-8"
+                  className="flex gap-4 mt-8 pointer-events-auto"
                   initial={{ opacity: 0, y: 16 }}
                   animate={scrambleDone ? { opacity: 1, y: 0 } : {}}
                   transition={{
@@ -155,32 +166,12 @@ export default function HomePage() {
                 </motion.div>
               </div>
             </div>
-
-            {/* Right column — illustration */}
-            <motion.div
-              className="hidden md:flex flex-1 items-center justify-center"
-              initial={{ opacity: 0, x: 40 }}
-              animate={scrambleDone ? { opacity: 1, x: 0 } : {}}
-              transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
-            >
-              <motion.div
-                className="w-full max-w-md lg:max-w-lg xl:max-w-xl"
-                animate={{ y: [0, -8, 0] }}
-                transition={{
-                  duration: 4,
-                  repeat: Infinity,
-                  ease: "easeInOut",
-                }}
-              >
-                <HeroIllustration className="w-full h-auto" />
-              </motion.div>
-            </motion.div>
           </div>
         </div>
 
         {/* Scroll indicator */}
         <motion.div
-          className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2"
+          className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 z-[2]"
           initial={{ opacity: 0 }}
           animate={scrambleDone ? { opacity: 1 } : {}}
           transition={{
