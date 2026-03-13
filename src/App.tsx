@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import Nav from "./components/Nav";
 import Footer from "./components/Footer";
 import CustomCursor from "./components/CustomCursor";
@@ -8,8 +8,14 @@ import ProjectDetailPage from "./pages/ProjectDetailPage";
 
 function ScrollToHash() {
   const { hash } = useLocation();
+  const isInitialLoad = useRef(true);
 
   useEffect(() => {
+    if (isInitialLoad.current) {
+      isInitialLoad.current = false;
+      return;
+    }
+
     if (hash) {
       const id = hash.replace("#", "");
       const timer = setTimeout(() => {

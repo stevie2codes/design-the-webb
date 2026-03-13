@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Menu, X } from "lucide-react";
 import { AnimatePresence, motion, useMotionValue, useSpring } from "framer-motion";
-import ScrambleText from "./ScrambleText";
 
 /* ── Magnetic link wrapper ─────────────────────────── */
 function MagneticLink({
@@ -218,13 +217,13 @@ export default function Nav() {
         />
 
         <div className="max-w-6xl mx-auto flex items-center justify-between">
-          {/* Animated logo */}
-          <Link
-            to="/"
-            className="font-display text-xl text-dark tracking-tight"
-          >
-            <ScrambleText text="SW" delay={200} speed={100} />
-            <span className="text-orange">.</span>
+          {/* Logo */}
+          <Link to="/" className="block">
+            <img
+              src="/logo.png"
+              alt="SW."
+              className="h-8 w-auto"
+            />
           </Link>
 
           {/* Desktop links — staggered entrance */}
