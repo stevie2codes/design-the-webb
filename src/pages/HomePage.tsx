@@ -66,17 +66,17 @@ export default function HomePage() {
               "linear-gradient(105deg, #faf9f5 0%, #faf9f5 28%, rgba(250,249,245,0.92) 35%, rgba(250,249,245,0.7) 45%, rgba(250,249,245,0.3) 55%, rgba(250,249,245,0) 65%)",
           }}
         />
-        {/* Mobile: strong top coverage fading into constellation at bottom */}
+        {/* Mobile: lighter veil so constellation nodes show through subtly */}
         <div
           className="absolute inset-0 z-[1] pointer-events-none md:hidden"
           style={{
             background:
-              "linear-gradient(180deg, #faf9f5 0%, rgba(250,249,245,0.95) 50%, rgba(250,249,245,0.6) 75%, rgba(250,249,245,0.2) 90%, rgba(250,249,245,0) 100%)",
+              "linear-gradient(180deg, rgba(250,249,245,0.85) 0%, rgba(250,249,245,0.7) 35%, rgba(250,249,245,0.5) 55%, rgba(250,249,245,0.25) 75%, rgba(250,249,245,0) 100%)",
           }}
         />
 
         {/* Text content floats above canvas */}
-        <div className="relative z-[2] flex items-end md:items-center min-h-screen px-6 md:px-12 pt-24 pb-28 md:pt-0 md:pb-0 pointer-events-none">
+        <div className="relative z-[2] flex items-center min-h-screen px-6 md:px-12 pt-20 pb-16 md:pt-0 md:pb-0 pointer-events-none">
           <div className="max-w-6xl mx-auto w-full">
             <div className="max-w-xl">
               <motion.p
@@ -177,9 +177,9 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Scroll indicator */}
+        {/* Scroll indicator — hidden on mobile */}
         <motion.div
-          className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 z-[2]"
+          className="absolute bottom-8 left-1/2 -translate-x-1/2 hidden md:flex flex-col items-center gap-2 z-[2]"
           initial={{ opacity: 0 }}
           animate={scrambleDone ? { opacity: 1 } : {}}
           transition={{

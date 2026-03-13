@@ -58,13 +58,11 @@ function createNode(i: number, W: number, H: number): ConstellationNode {
 
   if (isMobile) {
     x = Math.random() * W;
-    // Bias toward bottom 60% so text area up top stays clear
-    y = (0.4 + Math.random() * 0.6) * H;
-    // Faint out the top-drifting nodes
-    if (Math.random() < 0.15) {
-      y = Math.random() * 0.4 * H;
-      opacity = 0.1 + Math.random() * 0.15;
-    }
+    y = Math.random() * H;
+    // Nodes in the top half are fainter (behind the gradient veil)
+    // Nodes in the bottom half are more visible
+    const verticalFade = y / H; // 0 at top, 1 at bottom
+    opacity = 0.12 + verticalFade * 0.5;
   } else {
     const biasedX = 0.4 + Math.random() * 0.6;
     x = biasedX * W;
