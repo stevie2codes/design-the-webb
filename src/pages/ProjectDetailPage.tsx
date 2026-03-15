@@ -1,7 +1,7 @@
 import { useParams, Link } from "react-router-dom";
 import { useEffect } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, ArrowUpRight, Github, ImageIcon } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, ExternalLink, Github, ImageIcon } from "lucide-react";
 import Reveal from "../components/Reveal";
 import SectionLabel from "../components/SectionLabel";
 import { sideProjects } from "../data/projects";
@@ -81,16 +81,30 @@ export default function ProjectDetailPage() {
           </Reveal>
 
           <Reveal delay={0.2}>
-            <a
-              href={project.githubUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="group inline-flex items-center gap-2 px-6 py-3 rounded-full border border-dark/15 text-dark text-sm font-medium hover:border-dark/40 transition-colors"
-            >
-              <Github className="w-4 h-4" />
-              View on GitHub
-              <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-            </a>
+            <div className="flex flex-wrap gap-3">
+              {project.liveUrl && (
+                <a
+                  href={project.liveUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group inline-flex items-center gap-2 px-6 py-3 rounded-full bg-dark text-cream text-sm font-medium hover:bg-dark-soft transition-colors"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  View Live
+                  <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                </a>
+              )}
+              <a
+                href={project.githubUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group inline-flex items-center gap-2 px-6 py-3 rounded-full border border-dark/15 text-dark text-sm font-medium hover:border-dark/40 transition-colors"
+              >
+                <Github className="w-4 h-4" />
+                View on GitHub
+                <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+              </a>
+            </div>
           </Reveal>
         </div>
       </section>
@@ -99,10 +113,18 @@ export default function ProjectDetailPage() {
       <section className="px-6 md:px-12 pb-20 md:pb-28">
         <Reveal>
           <div className="max-w-5xl mx-auto">
-            <div className="rounded-2xl border border-dashed border-dark/10 bg-cream-dark aspect-video flex flex-col items-center justify-center gap-4">
-              <ImageIcon className="w-10 h-10 text-muted/40" strokeWidth={1} />
-              <p className="text-sm text-muted/60">Screenshot coming soon</p>
-            </div>
+            {project.screenshot ? (
+              <img
+                src={project.screenshot}
+                alt={`${project.title} screenshot`}
+                className="rounded-2xl w-full shadow-lg"
+              />
+            ) : (
+              <div className="rounded-2xl border border-dashed border-dark/10 bg-cream-dark aspect-video flex flex-col items-center justify-center gap-4">
+                <ImageIcon className="w-10 h-10 text-muted/40" strokeWidth={1} />
+                <p className="text-sm text-muted/60">Screenshot coming soon</p>
+              </div>
+            )}
           </div>
         </Reveal>
       </section>

@@ -231,14 +231,6 @@ export default function HomePage() {
                   — giving users specific, use-case-driven reporting tools
                   that actually meet their needs.
                 </p>
-                <p>
-                  I believe the best data products don't simplify away
-                  complexity. They make complexity{" "}
-                  <em className="text-dark font-normal not-italic">
-                    navigable
-                  </em>
-                  . Every chart, filter, and interaction should earn its place.
-                </p>
               </div>
             </Reveal>
           </div>
