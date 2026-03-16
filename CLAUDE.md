@@ -7,7 +7,7 @@ Personal portfolio website for a product designer in the SaaS data space.
 - **Framework**: React 19 + TypeScript + Vite 7
 - **Styling**: Tailwind CSS v4 (via `@tailwindcss/vite` plugin — no `tailwind.config.js`)
 - **Animation**: Framer Motion
-- **Generative Art**: p5.js (instance mode for React compatibility)
+
 - **Icons**: Lucide React
 - **Fonts**: Instrument Serif (display) + DM Sans (body) — loaded via `<link>` in `index.html`
 
@@ -15,11 +15,11 @@ Personal portfolio website for a product designer in the SaaS data space.
 
 ```
 src/
-  App.tsx              — Main single-page app with all sections
+  App.tsx              — Router setup
   index.css            — Tailwind imports + @theme tokens + base layer overrides
-  components/
-    BlueprintGrid.tsx  — p5.js hero background (morphing wireframe rectangles on dot grid)
-    MeshNetwork.tsx    — p5.js floating connected nodes (available, not currently used)
+  components/          — Reusable UI components
+  pages/               — Page-level components
+  data/                — Static data (projects, etc.)
 ```
 
 ## Design System
@@ -49,10 +49,6 @@ src/
 - Custom CSS MUST be wrapped in `@layer base { }` — un-layered styles override all Tailwind utilities due to CSS cascade layer precedence
 - Google Fonts loaded via HTML `<link>`, NOT CSS `@import` (causes ordering conflicts with Tailwind)
 
-### p5.js in React
-- Uses p5.js **instance mode** (`new p5((p) => { ... })`) — NOT global mode
-- Canvas managed via `useRef` + `useEffect` cleanup
-- p5.js v2 may produce "Invalid hook call" console warnings — these are non-breaking
 
 ### Framer Motion
 - Scroll animations use `whileInView` prop (not `useInView` hook)
@@ -69,6 +65,6 @@ src/
 
 - Keep the aesthetic: warm, editorial, craft-forward — not generic AI/SaaS
 - Maintain generous whitespace — this is a design portfolio
-- BlueprintGrid is the hero identity piece — preserve it
+- Hero background is an identity piece — preserve it
 - Prefer Tailwind utilities over custom CSS
 - When adding custom CSS, always wrap in `@layer base { }` or `@layer components { }`
