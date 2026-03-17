@@ -65,6 +65,6 @@ src/
 
 - Keep the aesthetic: warm, editorial, craft-forward — not generic AI/SaaS
 - Maintain generous whitespace — this is a design portfolio
-- Hero background is an identity piece — preserve it
+- Hero background is a multi-layer Framer Motion parallax composition (blobs + geometry + particles in `components/hero-bg/`) — preserve it
 - Prefer Tailwind utilities over custom CSS
 - When adding custom CSS, always wrap in `@layer base { }` or `@layer components { }`

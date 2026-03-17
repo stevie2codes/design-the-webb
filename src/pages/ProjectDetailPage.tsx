@@ -2,7 +2,7 @@ import { useParams, Link } from "react-router-dom";
 import { useEffect } from "react";
 import { motion } from "framer-motion";
 import { ArrowLeft, ArrowUpRight, ExternalLink, Github, ImageIcon } from "lucide-react";
-import Reveal from "../components/Reveal";
+import GSAPReveal from "../components/GSAPReveal";
 import SectionLabel from "../components/SectionLabel";
 import { sideProjects } from "../data/projects";
 
@@ -16,6 +16,15 @@ export default function ProjectDetailPage() {
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [slug]);
+
+  useEffect(() => {
+    if (project) {
+      document.title = `${project.title} — Stephen Webb`;
+    }
+    return () => {
+      document.title = "Stephen Webb — Senior Product Designer";
+    };
+  }, [project]);
 
   if (!project) {
     return (
@@ -45,7 +54,7 @@ export default function ProjectDetailPage() {
       {/* ═══ HEADER ═══ */}
       <section className="pt-32 md:pt-40 pb-20 md:pb-28 px-6 md:px-12">
         <div className="max-w-4xl mx-auto">
-          <Reveal>
+          <GSAPReveal>
             <Link
               to="/#work"
               className="group inline-flex items-center gap-2 text-sm font-medium text-muted hover:text-dark transition-colors mb-16"
@@ -53,9 +62,9 @@ export default function ProjectDetailPage() {
               <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
               Back to Work
             </Link>
-          </Reveal>
+          </GSAPReveal>
 
-          <Reveal delay={0.05}>
+          <GSAPReveal delay={0.05}>
             <div className="flex flex-wrap gap-2 mb-8">
               {project.tags.map((tag) => (
                 <span
@@ -66,21 +75,21 @@ export default function ProjectDetailPage() {
                 </span>
               ))}
             </div>
-          </Reveal>
+          </GSAPReveal>
 
-          <Reveal delay={0.1}>
+          <GSAPReveal delay={0.1}>
             <h1 className="font-display text-5xl md:text-7xl lg:text-8xl text-dark leading-[0.95] tracking-tight mb-6">
               {project.title}
             </h1>
-          </Reveal>
+          </GSAPReveal>
 
-          <Reveal delay={0.15}>
+          <GSAPReveal delay={0.15}>
             <p className="text-lg md:text-xl text-muted leading-relaxed max-w-2xl mb-10">
               {project.description}
             </p>
-          </Reveal>
+          </GSAPReveal>
 
-          <Reveal delay={0.2}>
+          <GSAPReveal delay={0.2}>
             <div className="flex flex-wrap gap-3">
               {project.liveUrl && (
                 <a
@@ -105,13 +114,13 @@ export default function ProjectDetailPage() {
                 <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
               </a>
             </div>
-          </Reveal>
+          </GSAPReveal>
         </div>
       </section>
 
       {/* ═══ SCREENSHOT ═══ */}
       <section className="px-6 md:px-12 pb-20 md:pb-28">
-        <Reveal>
+        <GSAPReveal>
           <div className="max-w-5xl mx-auto">
             {project.screenshot ? (
               <img
@@ -126,23 +135,23 @@ export default function ProjectDetailPage() {
               </div>
             )}
           </div>
-        </Reveal>
+        </GSAPReveal>
       </section>
 
       {/* ═══ WRITEUP ═══ */}
       <section className="px-6 md:px-12 pb-32 md:pb-40">
         <div className="max-w-3xl mx-auto">
-          <Reveal>
+          <GSAPReveal>
             <SectionLabel className="mb-12">About This Project</SectionLabel>
-          </Reveal>
+          </GSAPReveal>
 
           <div className="space-y-8">
             {project.writeup.map((paragraph, i) => (
-              <Reveal key={i} delay={0.05 + i * 0.06}>
+              <GSAPReveal key={i} delay={0.05 + i * 0.06}>
                 <p className="text-muted leading-[1.9] text-[16px]">
                   {paragraph}
                 </p>
-              </Reveal>
+              </GSAPReveal>
             ))}
           </div>
         </div>

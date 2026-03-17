@@ -304,25 +304,23 @@ export default function Nav() {
                 {mobileNavLink("about", "About")}
                 {mobileNavLink("work", "Work")}
                 {mobileNavLink("capabilities", "Capabilities")}
-                <a
-                  href={isHome ? "#contact" : undefined}
-                  onClick={(e) => {
-                    if (!isHome) e.preventDefault();
-                    setOpen(false);
-                  }}
-                  className="block text-3xl font-display tracking-tight text-orange transition-colors hover:text-orange-dark"
-                >
-                  {isHome ? (
-                    "Contact"
-                  ) : (
-                    <Link
-                      to="/#contact"
-                      className="text-orange hover:text-orange-dark"
-                    >
-                      Contact
-                    </Link>
-                  )}
-                </a>
+                {isHome ? (
+                  <a
+                    href="#contact"
+                    onClick={() => setOpen(false)}
+                    className="block text-3xl font-display tracking-tight text-orange transition-colors hover:text-orange-dark"
+                  >
+                    Contact
+                  </a>
+                ) : (
+                  <Link
+                    to="/#contact"
+                    onClick={() => setOpen(false)}
+                    className="block text-3xl font-display tracking-tight text-orange transition-colors hover:text-orange-dark"
+                  >
+                    Contact
+                  </Link>
+                )}
               </nav>
             </motion.div>
           </>

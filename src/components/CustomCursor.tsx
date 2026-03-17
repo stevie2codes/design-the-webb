@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { motion, useMotionValue, useSpring } from "framer-motion";
+import { useReducedMotion } from "../lib/useReducedMotion";
 
 const INTERACTIVE_SELECTORS = "a, button, [role='button'], input, textarea, select, [data-cursor='hover']";
 
 export default function CustomCursor() {
   const [hovered, setHovered] = useState(false);
   const [visible, setVisible] = useState(false);
+  const reduced = useReducedMotion();
 
   const mouseX = useMotionValue(-100);
   const mouseY = useMotionValue(-100);
@@ -15,9 +17,9 @@ export default function CustomCursor() {
   const y = useSpring(mouseY, springConfig);
 
   useEffect(() => {
-    // Hide on touch devices
+    // Hide on touch devices and when reduced motion is preferred
     const isTouchDevice = window.matchMedia("(pointer: coarse)").matches;
-    if (isTouchDevice) return;
+    if (isTouchDevice || reduced) return;
 
     function onMouseMove(e: MouseEvent) {
       mouseX.set(e.clientX);
@@ -58,7 +60,7 @@ export default function CustomCursor() {
       document.documentElement.removeEventListener("mouseleave", onMouseLeave);
       document.documentElement.removeEventListener("mouseenter", onMouseEnter);
     };
-  }, [mouseX, mouseY, visible]);
+  }, [mouseX, mouseY, visible, reduced]);
 
   // Don't render on touch devices (SSR-safe check happens in useEffect)
   return (
