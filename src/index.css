@@ -28,7 +28,8 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Paper grain — SVG feTurbulence noise overlay for warm, tactile feel */
+  /* Paper grain — SVG feTurbulence noise overlay for warm, tactile feel.
+     Disabled on mobile/tablet: feTurbulence is extremely expensive on low-power GPUs. */
   body::after {
     content: '';
     position: fixed;
@@ -40,6 +41,12 @@
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='600'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)' opacity='0.08'/%3E%3C/svg%3E");
     background-repeat: repeat;
     background-size: 600px 600px;
+  }
+
+  @media (max-width: 1024px), (pointer: coarse) {
+    body::after {
+      display: none;
+    }
   }
 
   ::selection {

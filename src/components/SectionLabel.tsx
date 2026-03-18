@@ -2,6 +2,7 @@ import { useRef, useMemo } from "react";
 import { useGSAP } from "@gsap/react";
 import { gsap } from "../lib/gsap-init";
 import { useReducedMotion } from "../lib/useReducedMotion";
+import { useIsMobile } from "../lib/useIsMobile";
 
 // djb2 string hash → deterministic seed
 function hashString(str: string): number {
@@ -55,12 +56,14 @@ export default function SectionLabel({
 }) {
   const pathRef = useRef<SVGPathElement>(null);
   const reduced = useReducedMotion();
+  const { isMobile } = useIsMobile();
   const seed = typeof children === "string" ? children : "section";
   const d = useMemo(() => generateSparklinePath(seed), [seed]);
 
   useGSAP(() => {
     const path = pathRef.current;
-    if (!path || reduced) return;
+    // Skip draw-on animation on mobile — show line immediately
+    if (!path || reduced || isMobile) return;
 
     const length = path.getTotalLength();
     gsap.set(path, { strokeDasharray: length, strokeDashoffset: length });
@@ -74,7 +77,7 @@ export default function SectionLabel({
         once: true,
       },
     });
-  }, { dependencies: [reduced, d] });
+  }, { dependencies: [reduced, isMobile, d] });
 
   return (
     <div className={`flex items-center gap-4 ${className}`}>

@@ -93,6 +93,8 @@ function ScreenshotImage({ src, alt }: { src: string; alt: string }) {
       <img
         src={src}
         alt={alt}
+        loading="lazy"
+        decoding="async"
         onError={() => setFailed(true)}
         className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500"
       />

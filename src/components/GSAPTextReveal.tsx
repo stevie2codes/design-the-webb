@@ -3,6 +3,7 @@ import { useGSAP } from "@gsap/react";
 import { gsap } from "../lib/gsap-init";
 import { useSplitText } from "../lib/useSplitText";
 import { useReducedMotion } from "../lib/useReducedMotion";
+import { useIsMobile } from "../lib/useIsMobile";
 
 interface GSAPTextRevealProps {
   children: React.ReactNode;
@@ -27,11 +28,29 @@ export default function GSAPTextReveal({
   const textRef = useRef<HTMLDivElement>(null);
   const { split } = useSplitText(textRef, { type: "chars" });
   const reduced = useReducedMotion();
+  const { isMobile } = useIsMobile();
 
   useGSAP(
     () => {
       const el = textRef.current;
       if (!el || reduced) return;
+
+      // On mobile: simple fade-in instead of per-character stagger (saves CPU)
+      if (isMobile) {
+        gsap.from(el, {
+          y: 20,
+          opacity: 0,
+          duration: 0.6,
+          ease: "power2.out",
+          scrollTrigger: {
+            trigger: el,
+            start: "top 85%",
+            once: true,
+          },
+          delay,
+        });
+        return;
+      }
 
       const result = split();
       if (!result || result.chars.length === 0) return;
@@ -69,7 +88,7 @@ export default function GSAPTextReveal({
         clipMask ? 0 : 0
       );
     },
-    { scope: textRef, dependencies: [reduced] }
+    { scope: textRef, dependencies: [reduced, isMobile] }
   );
 
   return (

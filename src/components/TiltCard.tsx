@@ -1,5 +1,6 @@
 import { useRef, useCallback } from "react";
 import { useReducedMotion } from "../lib/useReducedMotion";
+import { useIsMobile } from "../lib/useIsMobile";
 
 interface TiltCardProps {
   children: React.ReactNode;
@@ -14,10 +15,12 @@ export default function TiltCard({
 }: TiltCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const reduced = useReducedMotion();
+  const { isLowPower } = useIsMobile();
+  const disabled = reduced || isLowPower;
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
-      if (reduced) return;
+      if (disabled) return;
       const card = cardRef.current;
       if (!card) return;
 
@@ -32,17 +35,17 @@ export default function TiltCard({
 
       card.style.transform = `perspective(800px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
     },
-    [tiltStrength, reduced]
+    [tiltStrength, disabled]
   );
 
   const handleMouseLeave = useCallback(() => {
-    if (reduced) return;
+    if (disabled) return;
     const card = cardRef.current;
     if (card) {
       card.style.transform =
         "perspective(800px) rotateX(0deg) rotateY(0deg)";
     }
-  }, [reduced]);
+  }, [disabled]);
 
   return (
     <div
@@ -52,7 +55,7 @@ export default function TiltCard({
       onMouseLeave={handleMouseLeave}
       style={{
         transition: "transform 300ms ease-out",
-        willChange: reduced ? "auto" : "transform",
+        willChange: disabled ? "auto" : "transform",
       }}
     >
       {children}

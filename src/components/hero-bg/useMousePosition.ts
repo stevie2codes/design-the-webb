@@ -23,7 +23,8 @@ export function useMousePosition(
 
   useEffect(() => {
     const isTouchDevice = window.matchMedia("(pointer: coarse)").matches;
-    if (isTouchDevice) return;
+    const isSmallViewport = window.innerWidth <= 1024;
+    if (isTouchDevice || isSmallViewport) return;
 
     function onMouseMove(e: MouseEvent) {
       mouseX.set(e.clientX / window.innerWidth);

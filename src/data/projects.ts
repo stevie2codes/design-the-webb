@@ -18,7 +18,7 @@ export const sideProjects: Project[] = [
     tags: ["TypeScript", "AI", "Gov Data"],
     githubUrl: "https://github.com/stevie2codes/socrata-chat",
     liveUrl: "https://pulse-data.netlify.app/",
-    screenshot: "/screenshots/pulse.png",
+    screenshot: "/screenshots/pulse.jpg",
     writeup: [
       "Government open data is incredibly powerful — but it's also notoriously hard to access for anyone who doesn't speak SoQL or know their way around API endpoints. Pulse is an experiment in bridging that gap: a conversational interface that lets you ask plain-English questions about public datasets and get structured answers back.",
       "I built this as a side project to explore how AI could make government data more approachable, which directly connects to the work I do at Tyler Technologies. The tool takes a user's natural language query, translates it into a Socrata API call, and returns formatted results — turning what would normally require technical knowledge into a simple conversation.",
@@ -48,7 +48,7 @@ export const sideProjects: Project[] = [
     tags: ["TypeScript", "AI Agents", "Prompt Engineering"],
     githubUrl: "https://github.com/stevie2codes/prmptart",
     liveUrl: "https://prmptart.com/",
-    screenshot: "/screenshots/prmpt-art.png",
+    screenshot: "/screenshots/prmpt-art.jpg",
     writeup: [
       "The quality of AI output is directly tied to the quality of the input — and yet most people treat prompt engineering as an afterthought. Prmpt Art is a curated library of prompt patterns, templates, and strategies for getting better results from AI agents and language models.",
       "I started this project because I was spending a lot of time crafting and refining prompts for various AI tools in my workflow, and I realized the patterns I was discovering could be useful to others. The library organizes prompts by use case — from code generation to data analysis to creative writing — with explanations of why each pattern works.",

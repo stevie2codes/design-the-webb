@@ -126,6 +126,8 @@ export default function ProjectDetailPage() {
               <img
                 src={project.screenshot}
                 alt={`${project.title} screenshot`}
+                loading="lazy"
+                decoding="async"
                 className="rounded-2xl w-full shadow-lg"
               />
             ) : (

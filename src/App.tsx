@@ -1,13 +1,16 @@
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
-import { useEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import "./lib/gsap-init"; // Register GSAP plugins on app startup
 import Nav from "./components/Nav";
 import Footer from "./components/Footer";
 import CustomCursor from "./components/CustomCursor";
-import HomePage from "./pages/HomePage";
-import ProjectDetailPage from "./pages/ProjectDetailPage";
-import NotFoundPage from "./pages/NotFoundPage";
 import { useReducedMotion } from "./lib/useReducedMotion";
+import { useIsMobile } from "./lib/useIsMobile";
+
+// Lazy-load pages for smaller initial bundle
+const HomePage = lazy(() => import("./pages/HomePage"));
+const ProjectDetailPage = lazy(() => import("./pages/ProjectDetailPage"));
+const NotFoundPage = lazy(() => import("./pages/NotFoundPage"));
 
 function ScrollToHash() {
   const { hash } = useLocation();
@@ -33,9 +36,11 @@ function ScrollToHash() {
 
 function AppShell() {
   const reduced = useReducedMotion();
+  const { isLowPower } = useIsMobile();
+  const showCursor = !reduced && !isLowPower;
 
   return (
-    <div className={`bg-cream text-dark ${reduced ? "" : "cursor-none"}`}>
+    <div className={`bg-cream text-dark ${showCursor ? "cursor-none" : ""}`}>
       {/* Skip to main content — a11y */}
       <a
         href="#main"
@@ -43,15 +48,17 @@ function AppShell() {
       >
         Skip to main content
       </a>
-      {!reduced && <CustomCursor />}
+      {showCursor && <CustomCursor />}
       <Nav />
       <ScrollToHash />
       <main id="main">
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/work/:slug" element={<ProjectDetailPage />} />
-          <Route path="*" element={<NotFoundPage />} />
-        </Routes>
+        <Suspense fallback={<div className="min-h-screen" />}>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/work/:slug" element={<ProjectDetailPage />} />
+            <Route path="*" element={<NotFoundPage />} />
+          </Routes>
+        </Suspense>
       </main>
       <Footer />
     </div>
