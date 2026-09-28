@@ -1,70 +1,180 @@
-# Portfolio 2025
+# designthewebb.com: "Signal from Noise"
 
-Personal portfolio website for a product designer in the SaaS data space.
+Personal portfolio for Stephen Webb, Senior Product Designer. The site is dark and cinematic, built around a "living data field". One persistent full-viewport WebGL point field sits behind every route and morphs as you scroll. Sticky DOM chapters sit on top of it. As you scroll, noise comes into focus as the name, then pours into an honest career chart, redaction bars, a silhouette for each project, a capability stack, and finally a beacon you can click.
 
-## Tech Stack
+**`docs/redesign/SPEC.md` is the source of truth.** The `§` references below point into it. If this file and the spec disagree, follow the spec and fix this file.
 
-- **Framework**: React 19 + TypeScript + Vite 7
-- **Styling**: Tailwind CSS v4 (via `@tailwindcss/vite` plugin — no `tailwind.config.js`)
-- **Animation**: Framer Motion
+## Tech stack
 
-- **Icons**: Lucide React
-- **Fonts**: Instrument Serif (display) + DM Sans (body) — loaded via `<link>` in `index.html`
+- **Framework**: React 19, TypeScript and Vite 7. Routing uses `react-router-dom` 7, and every route is lazy and code-split.
+- **Styling**: Tailwind CSS v4 through `@tailwindcss/vite`. There is no `tailwind.config.js`.
+- **Motion**: GSAP 3.14 (ScrollTrigger, SplitText, CustomEase) with `@gsap/react` `useGSAP`. Smooth scroll is Lenis 1.3, on the desktop full-motion path only.
+- **Field**: vanilla `three` 0.186 with one `THREE.Points` object and a GLSL3 `ShaderMaterial`. It is **dynamically imported after first paint** and never enters the initial bundle. The Canvas2D fallback never imports three.
+- **Fonts**: self-hosted through fontsource and imported in `src/main.tsx`:
+  - Archivo Variable, including its width axis
+  - Instrument Serif italic
+  - JetBrains Mono Variable
 
-## Project Structure
-
-```
-src/
-  App.tsx              — Router setup
-  index.css            — Tailwind imports + @theme tokens + base layer overrides
-  components/          — Reusable UI components
-  pages/               — Page-level components
-  data/                — Static data (projects, etc.)
-```
-
-## Design System
-
-### Color Palette (defined in `@theme` in index.css)
-- `cream` (#faf9f5) — primary background
-- `cream-dark` (#f0ede5) — section alternate background
-- `orange` (#d97757) — accent/brand color
-- `dark` (#141413) — primary text
-- `muted` (#8a8880) — secondary text
-- `line` (#e0ddd4) — borders and dividers
-
-### Typography
-- Display/headings: `font-display` (Instrument Serif)
-- Body text: `font-body` (DM Sans)
-
-### Spacing Philosophy
-- Sections use generous vertical padding: `py-40 md:py-56 lg:py-64`
-- Content constrained to `max-w-6xl` with `px-6 md:px-12`
-- Large gaps between elements for breathing room on wide viewports
-
-## Key Patterns
-
-### Tailwind CSS v4 Specifics
-- Uses `@import "tailwindcss"` instead of `@tailwind` directives
-- Theme tokens defined with `@theme { }` block (not `tailwind.config.js`)
-- Custom CSS MUST be wrapped in `@layer base { }` — un-layered styles override all Tailwind utilities due to CSS cascade layer precedence
-- Google Fonts loaded via HTML `<link>`, NOT CSS `@import` (causes ordering conflicts with Tailwind)
-
-
-### Framer Motion
-- Scroll animations use `whileInView` prop (not `useInView` hook)
-- `Reveal` wrapper component handles scroll-triggered fade-in + slide-up
-- `viewport={{ once: true }}` so animations only trigger once
+  There are **no Google Fonts** `<link>`s. The Archivo latin woff2 is preloaded by the `preloadFonts()` plugin in `vite.config.ts`.
+- **Icons**: `lucide-react` at `strokeWidth={1.5}`. Only Lock, ArrowUpRight, ArrowUp, Copy, Menu and X are used.
+- **Removed, do not reintroduce**: Framer Motion, `components/hero-bg/`, the cream/orange palette, custom cursors that hide the native cursor, and magnetic buttons.
 
 ## Commands
 
-- `npm run dev` — Start dev server (port 5173)
-- `npm run build` — Production build
-- `npm run preview` — Preview production build
+- `npm run dev`: dev server on port 5173.
+- `npm run build`: runs `tsc -b`, then the Vite build.
+- `npm run lint`: ESLint.
+- `npm run preview`: serves the production build.
+- `npx tsc -p tsconfig.app.json --noEmit`: typecheck only.
+- `npm run gen:layout`: rewrites the static layout CSS variables in `src/index.css` from `src/field/layout.ts`. **Run it after every edit to layout.ts.** `node scripts/gen-layout-css.mjs --check` checks for drift without writing. It needs Node 22.18 or later for native TypeScript stripping.
+- `npm run gen:grain`: regenerates `public/textures/grain-128.png`.
 
-## Guidelines
+## Module layout (§9.1)
 
-- Keep the aesthetic: warm, editorial, craft-forward — not generic AI/SaaS
-- Maintain generous whitespace — this is a design portfolio
-- Hero background is a multi-layer Framer Motion parallax composition (blobs + geometry + particles in `components/hero-bg/`) — preserve it
-- Prefer Tailwind utilities over custom CSS
-- When adding custom CSS, always wrap in `@layer base { }` or `@layer components { }`
+```
+index.html                pre-paint script: no-js→js, html.rm, html[data-layout]; scrollRestoration manual
+src/
+  main.tsx                fontsource + lenis.css + index.css; applyLayoutVars(); init motion/layout sync
+  App.tsx                 shell: SkipLink, #field-root, Atmosphere, Nav, Rail, Hud, <main id="main">, Footer
+  index.css               @theme tokens, custom variants, @layer base / components (see below)
+  content/
+    site.ts               EVERY home + shell string (Appendix A). Never hard-code copy in components.
+    projects.ts           side projects: verbatim copy + index, emblem StateId, side, screenshot w/h
+  motion/
+    gsap.ts               the only place plugins are registered; exports gsap, ScrollTrigger, SplitText, useGSAP, EASE, DUR
+    motionPref.ts         reduced motion (OS + footer toggle, localStorage 'dtw:motion'), html.rm, useMotionPref()
+    useLayoutMode.ts      'desktop' | 'mobile' (MQ.mobile), html[data-layout], useLayoutMode()
+    lenis.ts, reveal.ts   (scroll phase)
+  scroll/
+    chapters.ts           document map: CHAPTERS (L, sticky flags), HOME_ORDER, JUMP_OFFSET_VH, headingId()
+    store.ts, segments.ts, director.ts, anchors.ts, useChapter.ts   (scroll phase, §9.2–9.6)
+  field/
+    layout.ts             SINGLE SOURCE OF TRUTH for anchor boxes (vw/svh), desktop + mobile; CHART geometry,
+                          card box, slot heights, MQ; resolveAnchor(); layoutCss(); applyLayoutVars()
+    states/ids.ts         StateId (const object + type; enums are not allowed by erasableSyntaxOnly)
+    index.ts, FieldCanvas.tsx, engine.ts, tiers.ts, textures.ts, uniforms.ts, shaders/, states/s00…s10,
+    worker/, fallback2d.ts, debug.ts   (engine phases)
+  chapters/               Hero, About, CareerChart, Nda, Projects, ProjectPanel, Capabilities, Contact
+  components/             Chapter, ChapterHeading, LinkLabel, Chip, SkipLink, Atmosphere, Nav, MobileMenu,
+                          Rail, Hud, Footer, CopyEmail, MotionToggle (+ CursorRing, JumpCutOverlay later)
+  pages/                  HomePage (composes chapters), ProjectDetailPage, NotFoundPage
+scripts/                  gen-layout-css.mjs, make-grain.mjs
+```
+
+## The field architecture, in short
+
+- **One field, many states.** There are 11 states: S0 STATIC, S1 NAME, S2 CHART, S3 REDACTED, S4 PULSE, S5 LATTICE, S6 DECK, S7 CONSTELLATION, S8 STACK, S9 BEACON and S10 FLATLINE (404 only).
+  - Every state is resident on the GPU as position and meta DataTextures (§3.4). Crossing a segment boundary only swaps uniforms.
+- **Scroll drives it.** A pure function maps scrollY to a film position F ∈ [0, 9], and a 120 ms damp smooths it (§4.3).
+  - Sticky stages replace GSAP pins, and there are **no pins anywhere**.
+  - A plain mutable store feeds the render loop. **React never re-renders per frame, and nothing reads layout per frame.** HUD, rail and nav read the store through refs at 10 Hz or less.
+- **Registration.** Every shape is aspect-fit into an anchor box from `field/layout.ts`.
+  - The DOM places empty `[data-field-anchor="Sx"]` boxes from the same CSS variables.
+  - `useChapter` measures those boxes, and every `[data-safe]` text block, **on ScrollTrigger refresh only**.
+- **Paths** (§9.12). Every path shows the same content, and no text depends on WebGL, JS or animation.
+  - Full desktop: Lenis, sticky stages, WebGL High or Mid tier.
+  - Full mobile: native scroll, only C0 and C5 sticky, WebGL Low tier, field slots.
+  - Reduced motion: no Lenis, flow layout, still posters.
+  - No WebGL: Canvas2D fallback.
+  - No JS: CSS glow backdrop.
+
+## Rules
+
+- **Preserve the field.** It is a single persistent `#field-root` host in the App shell, outside `<Routes>`, and it outlives route changes. Do not add other canvases, background animations or decorative layers that compete with it. Do not remount it per route. In StrictMode it must create exactly one WebGL context.
+- **Copy.** Every string traces to SPEC Appendix A through `src/content/`. Do not invent facts or add copy.
+- **The DOM is the content.** Every word is real DOM text, and the `<h1>` is visible at first paint.
+  - Decorative elements are `aria-hidden`: the canvas, vignette, grain, HUD, counters, field slots, anchors and the footer wordmark.
+  - Arrow glyphs in labels are `aria-hidden`; use `<LinkLabel>`.
+- **Hold rule** (§7). Within a stuck range, only colour and emphasis change. Body copy never moves once revealed. Nothing is magnetic. The native cursor is never hidden.
+- **Contrast** (§2.3).
+  - `ink-3` only ever sits on solid surfaces.
+  - Every text block over the field gets `data-safe`.
+  - Ember text is never smaller than 12px.
+  - Ink on ember is forbidden.
+- **Focus.** Every hover effect also fires on `:focus-visible`, and touch targets are at least 44px.
+- **Performance.** Initial JS is ≤ 140 KB gzipped. three goes in its own chunk. Images always carry `width` and `height`.
+- **Motion.** Use GSAP only through `src/motion/gsap.ts`, and create triggers inside `useGSAP({ scope, dependencies: [reducedMotion, layout] })`. Every scrubbed tween uses `ease: 'none'` with `scrub: true`.
+
+## Design system (`src/index.css`)
+
+**Colours** (`@theme`; Tailwind's default palette is removed with `--color-*: initial`):
+
+| Token | Value | Use |
+|---|---|---|
+| `void` | `#050507` | Page background, WebGL clear colour |
+| `deep` | `#0a0a0e` | Footer, mobile menu |
+| `surface` / `surface-2` | `#111117` / `#18181f` | Cards; hover state |
+| `line` / `line-strong` | bone at 10% / 18% | Hairlines, chips; rail track, dividers |
+| `ink` / `ink-2` / `ink-3` | `#f2eee6` / `#a7a39a` / `#8c887f` | Text: primary / body / tertiary (solid surfaces only) |
+| `ember` | `#ff6a3d` | The single accent |
+| `ember-hot` | `#ffb08a` | Ember hover |
+| `ember-deep` | `#b8361a` | Pressed state only, never text |
+| `core` | `#ffe2cf` | Beacon CTA |
+| `steel` | `#8c97ad` | Chart swatch |
+
+**Type roles.** Use these `.t-*` classes, not ad-hoc font utilities. Add colour with `text-ink` and friends.
+- `.t-name`: the h1. Archivo 800 at 75% width, uppercase, sized by `--name-fs`.
+- `.t-display-xl`: the detail page title.
+- `.t-title`: project titles and the 404 heading.
+- `.t-display-l`: chapter statements.
+- `.t-display-m`: the hero lede, NDA heading, capability titles and the email address.
+- `.t-stat`: chart numerals.
+- `.t-lede`: lede paragraphs.
+- `.t-body`: body copy, max 62ch.
+- `.t-accent`: Instrument Serif italic at 1.04em, in ember. Use it for one to three voice words.
+- `.t-label`: JetBrains Mono at 12px, uppercase.
+- `.t-micro`: JetBrains Mono at 11px, for aria-hidden decoration only.
+
+**Tokens:**
+- Easing: `ease-cine`, `ease-out-expo`, `ease-in-expo`, `ease-ui`.
+- Radius: `rounded-media` (16px) and `rounded-pill`.
+- Spacing: `px-gutter` and `left-gutter`, `gap-x-col-gap`, `w-card-w` and `h-card-h`.
+
+**Custom variants:**
+- Layout:
+  - `mobile:` covers width < 768, or width < 1024 in portrait. Short landscape phones stay desktop.
+  - `desktop:` is everything else.
+  - `short:` is height < 600.
+  - `fine:` is `pointer: fine`.
+- Paths:
+  - `js:` and `nojs:` follow whether JS is running.
+  - `live:` means JS with full motion.
+  - `rm:` means reduced motion.
+  - `field-live:` and `no-field:` follow whether the WebGL field is drawing.
+  - **`staged:`** applies only inside a chapter whose stage is actually sticky right now. Use it for stacked or absolute stage layouts that must fall back to flow under no-js and rm.
+
+**Component classes:**
+- `.chapter` / `.stage`: rendered by `<Chapter>`; see below.
+- `[data-field-anchor="Sx"]`: positioned from the `--anchor-<state>-x|y|w|h` variables.
+- `.field-slot[data-slot=about|work|project|capabilities]`: mobile only. It is `display: none` on desktop.
+- `[data-safe]` (alias `.scrim`): a void scrim at .82 opacity, 48px beyond the block, feathered.
+- `.chip`.
+- `.btn` with `.btn-ember`, `.btn-line` or `.btn-outline-ember`: 48px tall.
+- `.link-line`: a 1px underline that scales in; 44px tall.
+- `.scan-print`: the h1 mask driven by `--scan`.
+- `.skip-link`.
+- `.field-root`, `.atmo`, `.atmo-vignette`, `.atmo-grain`.
+
+**Chapters** (§4.1, §4.2). Wrap every home chapter in `<Chapter id="…" labelledBy={headingId(id)}>`.
+- It takes its L and sticky flags from `CHAPTERS` in `scroll/chapters.ts`.
+- When sticky, the section is `100svh + L` tall and the `.stage` is `sticky; top: 0; 100svh`. This happens only under `html.js:not(.rm)`, and on mobile only for the hero and contact.
+- Everywhere else the chapter is plain flow, and the stages of sticky chapters keep `min-height: 100svh`.
+- Never put `overflow: hidden` on an ancestor of a stage, because it breaks sticky. Use `overflow: clip` instead.
+
+**Layout variables.** They live on `:root`:
+- `--gutter`, `--col-gap`, `--name-fs`, `--card-w`, `--card-h`
+- `--slot-*`
+- `--anchor-<state>-*`
+
+Each has a desktop value and a mobile value. They are generated from `field/layout.ts`: the static copy sits in index.css between the `@generated` markers, and the runtime copy is injected by `applyLayoutVars()`. **Edit layout.ts, never the generated block.**
+
+**Stacking order** (z-index): body glow −1, `#field-root` 0, atmosphere 1, `main` and footer 2, rail and HUD 30, nav 40, mobile menu 50, jump-cut overlay 60, cursor ring 70, skip link 80.
+
+## Tailwind CSS v4 specifics
+
+- Use `@import "tailwindcss"`, not the `@tailwind` directives.
+- Define theme tokens in the `@theme { }` block. Define variants with `@custom-variant`.
+- Custom CSS **must** live in `@layer base { }` or `@layer components { }`. Unlayered styles beat every Tailwind utility because of cascade layer precedence.
+  - The one intentional exception is the runtime `<style id="dtw-layout-vars">`.
+- Load fonts from JS through the fontsource imports in main.tsx, never through a CSS `@import` of a remote stylesheet.
+- Prefer Tailwind utilities over custom CSS. Shared multi-property roles go in `@layer components`.

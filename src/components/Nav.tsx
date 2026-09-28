@@ -1,331 +1,184 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { Link, useLocation } from "react-router-dom";
-import { Menu, X } from "lucide-react";
-import { AnimatePresence, motion, useMotionValue, useSpring } from "framer-motion";
+import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react';
+import { flushSync } from 'react-dom';
+import { Link, useLocation } from 'react-router-dom';
+import { Menu } from 'lucide-react';
+import { nav } from '../content/site';
+import { subscribeLayoutMode } from '../motion/useLayoutMode';
+import { isPlainClick, jumpToChapter, type JumpId } from '../scroll/jump';
+import LinkLabel from './LinkLabel';
+import MobileMenu, { type NavChapterId } from './MobileMenu';
 
-/* ── Magnetic link wrapper ─────────────────────────── */
-function MagneticLink({
-  children,
-  className,
-  ...props
-}: React.ComponentProps<typeof motion.a>) {
-  const ref = useRef<HTMLAnchorElement>(null);
-  const x = useMotionValue(0);
-  const y = useMotionValue(0);
-  const springX = useSpring(x, { stiffness: 300, damping: 20 });
-  const springY = useSpring(y, { stiffness: 300, damping: 20 });
+/** The scrim fades in once the page has scrolled this far (§6). */
+const SCRIM_AFTER_PX = 40;
 
+/**
+ * Active-dot hook: Rail publishes the chapter in hold on
+ * html[data-active-chapter] (home only). Static strings, so Tailwind sees them.
+ */
+const ACTIVE: Record<NavChapterId, { link: string; dot: string }> = {
+  about: {
+    link: '[html[data-active-chapter=about]_&]:text-ink',
+    dot: '[html[data-active-chapter=about]_&]:opacity-100',
+  },
+  work: {
+    link: '[html[data-active-chapter=work]_&]:text-ink',
+    dot: '[html[data-active-chapter=work]_&]:opacity-100',
+  },
+  capabilities: {
+    link: '[html[data-active-chapter=capabilities]_&]:text-ink',
+    dot: '[html[data-active-chapter=capabilities]_&]:opacity-100',
+  },
+  contact: {
+    link: '[html[data-active-chapter=contact]_&]:text-ink',
+    dot: '[html[data-active-chapter=contact]_&]:opacity-100',
+  },
+};
+
+/**
+ * "Stephen Webb" split for the collapse to "SW" after the hero (§6). The
+ * folds are 1fr → 0fr grid tracks; the scroll phase sets data-collapsed on
+ * the header. The accessible name stays the full name.
+ */
+function Wordmark() {
+  const fold =
+    'inline-grid grid-cols-[1fr] transition-[grid-template-columns] duration-500 ease-cine rm:transition-none group-data-[collapsed]/nav:grid-cols-[0fr]';
   return (
-    <motion.a
-      ref={ref}
-      className={className}
-      style={{ x: springX, y: springY }}
-      onMouseMove={(e) => {
-        const rect = ref.current?.getBoundingClientRect();
-        if (!rect) return;
-        const dx = e.clientX - (rect.left + rect.width / 2);
-        const dy = e.clientY - (rect.top + rect.height / 2);
-        x.set(dx * 0.25);
-        y.set(dy * 0.25);
-      }}
-      onMouseLeave={() => {
-        x.set(0);
-        y.set(0);
-      }}
-      {...props}
-    >
-      {children}
-    </motion.a>
+    <span aria-hidden="true" className="inline-flex whitespace-nowrap">
+      <span>S</span>
+      <span className={fold}>
+        <span className="min-w-0 overflow-hidden">tephen{' '}</span>
+      </span>
+      <span>W</span>
+      <span className={fold}>
+        <span className="min-w-0 overflow-hidden">ebb</span>
+      </span>
+    </span>
   );
 }
 
-function MagneticRouterLink({
-  children,
-  className,
-  to,
-}: { children: React.ReactNode; className?: string; to: string }) {
-  const ref = useRef<HTMLAnchorElement>(null);
-  const x = useMotionValue(0);
-  const y = useMotionValue(0);
-  const springX = useSpring(x, { stiffness: 300, damping: 20 });
-  const springY = useSpring(y, { stiffness: 300, damping: 20 });
-
-  return (
-    <motion.div
-      style={{ x: springX, y: springY, display: "inline-block" }}
-      onMouseMove={(e) => {
-        const rect = ref.current?.getBoundingClientRect();
-        if (!rect) return;
-        const dx = e.clientX - (rect.left + rect.width / 2);
-        const dy = e.clientY - (rect.top + rect.height / 2);
-        x.set(dx * 0.25);
-        y.set(dy * 0.25);
-      }}
-      onMouseLeave={() => {
-        x.set(0);
-        y.set(0);
-      }}
-    >
-      <Link ref={ref} to={to} className={className}>
-        {children}
-      </Link>
-    </motion.div>
-  );
-}
-
-/* ── Nav sections for intersection observer ────────── */
-const SECTIONS = ["about", "work", "capabilities", "contact"] as const;
-
+/**
+ * Fixed nav (SPEC §6): 64px (56px mobile), never hides. A 96px (mobile 80px) void scrim
+ * fades in after 40px of scroll (data-scrolled, set from a passive listener —
+ * no React state per scroll). Wordmark → "/"; desktop chapter links with an
+ * active dot and the Email pill; a Menu button opens the mobile overlay.
+ * Chapter links jump in place on home and navigate to /#id elsewhere.
+ */
 export default function Nav() {
   const { pathname } = useLocation();
-  const isHome = pathname === "/";
-  const [open, setOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
-  const [activeSection, setActiveSection] = useState<string>("");
-  const [scrollProgress, setScrollProgress] = useState(0);
+  const onHome = pathname === '/';
+  const headerRef = useRef<HTMLElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  // Scroll-aware style shift + progress bar
+  // Scrim toggle: passive scroll listener, rAF-throttled, writes an attribute.
   useEffect(() => {
-    function onScroll() {
-      setScrolled(window.scrollY > 60);
-      const docHeight = document.documentElement.scrollHeight - window.innerHeight;
-      setScrollProgress(docHeight > 0 ? window.scrollY / docHeight : 0);
-    }
-    window.addEventListener("scroll", onScroll, { passive: true });
-    onScroll();
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  // Active section tracking via Intersection Observer
-  useEffect(() => {
-    if (!isHome) return;
-    const observers: IntersectionObserver[] = [];
-
-    SECTIONS.forEach((id) => {
-      const el = document.getElementById(id);
-      if (!el) return;
-      const observer = new IntersectionObserver(
-        ([entry]) => {
-          if (entry.isIntersecting) setActiveSection(id);
-        },
-        { rootMargin: "-40% 0px -55% 0px" }
-      );
-      observer.observe(el);
-      observers.push(observer);
-    });
-
-    return () => observers.forEach((o) => o.disconnect());
-  }, [isHome, pathname]);
-
-  // Lock body scroll when sheet is open
-  useEffect(() => {
-    document.body.style.overflow = open ? "hidden" : "";
-    return () => {
-      document.body.style.overflow = "";
+    const header = headerRef.current;
+    if (!header) return;
+    let raf = 0;
+    let scrolled: boolean | null = null;
+    const update = () => {
+      raf = 0;
+      const next = window.scrollY > SCRIM_AFTER_PX;
+      if (next === scrolled) return;
+      scrolled = next;
+      header.toggleAttribute('data-scrolled', next);
     };
-  }, [open]);
-
-  // Close on Escape key
-  const handleKey = useCallback((e: KeyboardEvent) => {
-    if (e.key === "Escape") setOpen(false);
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(update);
+    };
+    update();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      cancelAnimationFrame(raf);
+    };
   }, []);
 
+  // The menu never outlives its route or the mobile layout.
   useEffect(() => {
-    if (open) window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [open, handleKey]);
-
-  // Close sheet on route change
-  useEffect(() => {
-    setOpen(false);
+    setMenuOpen(false);
   }, [pathname]);
+  useEffect(
+    () =>
+      subscribeLayoutMode((mode) => {
+        if (mode === 'desktop') setMenuOpen(false);
+      }),
+    [],
+  );
 
-  /* ── Link builders ───────────────────────────────── */
-  function navLink(hash: string, label: string) {
-    const isActive = activeSection === hash;
-    const className = `relative transition-colors ${
-      isActive ? "text-dark" : "text-muted hover:text-dark"
-    }`;
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
 
-    if (isHome) {
-      return (
-        <MagneticLink href={`#${hash}`} className={className}>
-          {label}
-          {isActive && (
-            <motion.span
-              layoutId="nav-dot"
-              className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-orange"
-              transition={{ type: "spring", stiffness: 380, damping: 30 }}
-            />
-          )}
-        </MagneticLink>
-      );
-    }
-    return (
-      <MagneticRouterLink to={`/#${hash}`} className={className}>
-        {label}
-      </MagneticRouterLink>
-    );
-  }
-
-  function mobileNavLink(hash: string, label: string) {
-    const base =
-      "block text-3xl font-display tracking-tight text-dark transition-colors hover:text-orange";
-
-    if (isHome) {
-      return (
-        <a
-          href={`#${hash}`}
-          className={base}
-          onClick={() => setOpen(false)}
-        >
-          {label}
-        </a>
-      );
-    }
-    return (
-      <Link
-        to={`/#${hash}`}
-        className={base}
-        onClick={() => setOpen(false)}
-      >
-        {label}
-      </Link>
-    );
-  }
-
-  /* ── Stagger entrance delays ─────────────────────── */
-  const navItems = [
-    { hash: "about", label: "About" },
-    { hash: "work", label: "Work" },
-    { hash: "capabilities", label: "Capabilities" },
-  ];
+  const onChapterClick = (event: MouseEvent<HTMLAnchorElement>, id: JumpId) => {
+    if (!isPlainClick(event)) return;
+    // Close synchronously so the scroll lock is released and focus is back
+    // on the Menu button before the jump moves it to the chapter heading.
+    if (menuOpen) flushSync(() => setMenuOpen(false));
+    if (onHome && jumpToChapter(id)) event.preventDefault();
+    // Elsewhere <Link> navigates to /#id and the App scrolls once it renders.
+  };
 
   return (
     <>
-      <nav
-        className={`fixed top-0 left-0 right-0 z-50 px-6 md:px-12 py-5 transition-all duration-500 ${
-          scrolled
-            ? "bg-cream/80 backdrop-blur-md border-b border-line/60"
-            : "bg-transparent"
-        }`}
-      >
-        {/* Progress bar */}
-        <motion.div
-          className="absolute top-0 left-0 h-[2px] bg-orange origin-left"
-          style={{ scaleX: scrollProgress, width: "100%" }}
+      <header ref={headerRef} className="group/nav fixed inset-x-0 top-0 z-40">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-24 mobile:h-20 bg-linear-to-b from-void from-85% to-transparent opacity-0 transition-opacity duration-240 ease-ui group-data-[scrolled]/nav:opacity-100"
         />
-
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          {/* Logo */}
-          <Link to="/" className="block">
-            <img
-              src="/logo.png"
-              alt="SW."
-              className="h-8 w-auto"
-            />
+        <nav aria-label="Primary" className="flex h-16 items-center justify-between gap-6 px-gutter mobile:h-14">
+          <Link
+            to="/"
+            aria-label={nav.wordmark}
+            onClick={(e) => onChapterClick(e, 'top')}
+            className="t-label -mx-2 inline-flex min-h-11 items-center px-2 text-ink"
+          >
+            <Wordmark />
           </Link>
 
-          {/* Desktop links — staggered entrance */}
-          <div className="hidden md:flex items-center gap-8 text-sm font-medium text-muted">
-            {navItems.map((item, i) => (
-              <motion.div
-                key={item.hash}
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, delay: 0.3 + i * 0.08 }}
-              >
-                {navLink(item.hash, item.label)}
-              </motion.div>
-            ))}
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.3 + navItems.length * 0.08 }}
-            >
-              {isHome ? (
-                <MagneticLink
-                  href="#contact"
-                  className="ml-2 px-5 py-2 rounded-lg bg-dark text-cream text-sm hover:bg-dark-soft hover:-translate-y-0.5 hover:shadow-lg hover:shadow-dark/10 transition-all duration-300"
-                >
-                  Contact
-                </MagneticLink>
-              ) : (
-                <MagneticRouterLink
-                  to="/#contact"
-                  className="ml-2 px-5 py-2 rounded-lg bg-dark text-cream text-sm hover:bg-dark-soft hover:-translate-y-0.5 hover:shadow-lg hover:shadow-dark/10 transition-all duration-300"
-                >
-                  Contact
-                </MagneticRouterLink>
-              )}
-            </motion.div>
+          <div className="flex items-center gap-x-8 mobile:hidden xl:gap-x-10">
+            <ul className="flex items-center gap-x-6 xl:gap-x-8">
+              {nav.items.map((item) => (
+                <li key={item.id}>
+                  <Link
+                    to={`/#${item.id}`}
+                    onClick={(e) => onChapterClick(e, item.id)}
+                    className={`t-label relative inline-flex min-h-11 items-center gap-[0.6em] text-ink-2 transition-colors duration-240 ease-ui hover:text-ink focus-visible:text-ink ${ACTIVE[item.id].link}`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`absolute top-1/2 -left-3 size-1 -translate-y-1/2 rounded-full bg-ember opacity-0 transition-opacity duration-240 ease-ui ${ACTIVE[item.id].dot}`}
+                    />
+                    <span aria-hidden="true">{item.num}</span>
+                    <span>{item.label}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <a href={nav.email.href} aria-label={nav.email.ariaLabel} className="btn btn-outline-ember min-h-11 px-5">
+              <LinkLabel cta={nav.email} />
+            </a>
           </div>
 
-          {/* Mobile hamburger */}
           <button
-            className="md:hidden p-2 -mr-2 text-dark"
-            onClick={() => setOpen(!open)}
-            aria-label={open ? "Close menu" : "Open menu"}
-            aria-expanded={open}
+            ref={menuButtonRef}
+            type="button"
+            aria-haspopup="dialog"
+            aria-expanded={menuOpen}
+            aria-controls="site-menu"
+            onClick={() => setMenuOpen(true)}
+            className="t-label -mr-2 inline-flex min-h-11 items-center gap-2 px-2 text-ink desktop:hidden nojs:hidden"
           >
-            {open ? <X size={22} /> : <Menu size={22} />}
+            {nav.menu.open}
+            <Menu aria-hidden="true" size={16} strokeWidth={1.5} />
           </button>
-        </div>
-      </nav>
+        </nav>
+      </header>
 
-      {/* Mobile bottom sheet */}
-      <AnimatePresence>
-        {open && (
-          <>
-            {/* Backdrop */}
-            <motion.div
-              key="backdrop"
-              className="fixed inset-0 z-40 bg-dark/40 backdrop-blur-sm md:hidden"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.25 }}
-              onClick={() => setOpen(false)}
-            />
-
-            {/* Sheet */}
-            <motion.div
-              key="sheet"
-              className="fixed bottom-0 left-0 right-0 z-50 bg-cream rounded-t-2xl px-8 pt-10 pb-14 md:hidden"
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 28, stiffness: 300 }}
-            >
-              {/* Drag handle */}
-              <div className="absolute top-3 left-1/2 -translate-x-1/2 w-10 h-1 rounded-full bg-dark/15" />
-
-              <nav className="grid grid-cols-2 gap-y-8 gap-x-6">
-                {mobileNavLink("about", "About")}
-                {mobileNavLink("work", "Work")}
-                {mobileNavLink("capabilities", "Capabilities")}
-                {isHome ? (
-                  <a
-                    href="#contact"
-                    onClick={() => setOpen(false)}
-                    className="block text-3xl font-display tracking-tight text-orange transition-colors hover:text-orange-dark"
-                  >
-                    Contact
-                  </a>
-                ) : (
-                  <Link
-                    to="/#contact"
-                    onClick={() => setOpen(false)}
-                    className="block text-3xl font-display tracking-tight text-orange transition-colors hover:text-orange-dark"
-                  >
-                    Contact
-                  </Link>
-                )}
-              </nav>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+      <MobileMenu
+        open={menuOpen}
+        onClose={closeMenu}
+        onChapterClick={onChapterClick}
+        returnFocusRef={menuButtonRef}
+      />
     </>
   );
 }

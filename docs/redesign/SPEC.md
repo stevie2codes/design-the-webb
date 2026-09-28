@@ -634,7 +634,7 @@ Shares below are fractions of **M (shape)**. Sparks are listed separately; they 
   - Fizz rises: `y = base + fract(u0 + .12t)·band`, `α·(1 − f)²`.
   - The AI point pulses at 0.5 Hz (α .8–1) and its reticle dots rotate at .3 rad/s.
   - Bars never wobble: heights are data.
-- **Focus groups** (hover or focus on a stat, `uGroupW`):
+- **Focus groups** (hovering a stat, `uGroupW`; the stat blocks are `aria-hidden`, see §5 C1):
 
 | Stat | Groups lit |
 |---|---|
@@ -978,7 +978,7 @@ Conventions:
 | About top 35% → 0% | Portrait and paragraphs fade up (y 16px → 0). |
 | seg1 m .55 → 1 | **Numerals count in lockstep with the field.** Each bar's value = value × `smoothstep(.55 + .1k, .95 + .05k, m)`, where m is the director's *displayed* uMix, so the numbers match the grains actually landing. They snap to "2", "4+", "6+" at m ≥ .995. |
 | seg1 m ≥ .98 | Time-based, once, 500 ms: the AI point ignites, the leader line draws, and its label fades in. |
-| Stuck p 0–1 | **Hold.** Hover or focus on a stat sets `uGroupW` (S2 focus groups) over 500 ms. |
+| Stuck p 0–1 | **Hold.** Hovering a stat sets `uGroupW` (S2 focus groups) over 500 ms. The visible stat blocks are `aria-hidden` and not focusable, because the hidden table carries the same rows; keyboard and screen-reader users read the table. |
 
 ### C2 NDA — flow, 90vh — `#work`
 
@@ -1093,7 +1093,7 @@ Conventions:
 - Beacon CTA: a DOM `<a href="mailto:stephen@designthewebb.com">`.
   - A circle 1.24R in diameter, background `radial-gradient(circle, var(--color-core) 0 55%, transparent 72%)`.
   - Label **Email me ↗** in Archivo 600, 16px, void.
-  - `aria-label="Email stephen@designthewebb.com"`.
+  - `aria-label="Email me — stephen@designthewebb.com"` (it starts with the visible label, for WCAG 2.5.3 Label in Name).
   - Hover or focus sets `uCharge` = 1 over 400 ms; click fires `uNova`.
 - Email row: the address as selectable plain text **stephen@designthewebb.com** (`.t-display-m` ink, `user-select: all`) and a **Copy** button (`.t-label`). The button swaps to **Copied** for 1.6 s and announces through an `aria-live="polite"` region.
 - Body: **Always interested in connecting with fellow designers, engineers, and product thinkers. Let's talk shop.**
