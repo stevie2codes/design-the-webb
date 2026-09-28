@@ -1,18 +1,8 @@
 import { useLayoutEffect, useRef, type CSSProperties, type ReactNode, type Ref, type RefObject } from 'react';
+import { requestRefresh } from '../motion/lenis';
+import { svhPx } from '../scroll/anchors';
 import { CHAPTERS, type HomeChapterId } from '../scroll/chapters';
-
-/** A fixed, invisible 100svh box: the stage height in px, whatever the path. */
-let svhProbe: HTMLElement | null = null;
-function stageHeightPx(): number {
-  if (!svhProbe || !svhProbe.isConnected) {
-    svhProbe = document.createElement('div');
-    svhProbe.setAttribute('aria-hidden', 'true');
-    svhProbe.style.cssText =
-      'position:fixed;top:0;left:0;width:0;height:100svh;visibility:hidden;pointer-events:none';
-    document.body.appendChild(svhProbe);
-  }
-  return svhProbe.getBoundingClientRect().height;
-}
+import { useChapter, type UseChapterOptions } from '../scroll/useChapter';
 
 /**
  * The fit guard. A stuck stage is exactly 100svh, and during the hold every
@@ -21,8 +11,9 @@ function stageHeightPx(): number {
  * (its bottom − the stage top + the stage's bottom padding) exceeds 100svh,
  * the section gets [data-overflow] and CSS drops it to plain flow (the
  * reduced-motion layout), which grows to fit. Re-measured on resize and
- * font load. The scroll phase reads [data-overflow] (via the stage's
- * computed position) like any other flow chapter.
+ * font load. useChapter reads [data-overflow] (via the stage's computed
+ * position) like any other flow chapter; a flip requests a
+ * ScrollTrigger refresh so the store and the segments follow.
  *
  * Stage-only sizes (the `staged:` variant: tighter, height-capped type and
  * rhythm) apply only without [data-overflow], so the guard always measures
@@ -53,11 +44,12 @@ function useStageFit(sectionRef: RefObject<HTMLElement | null>, stageRef: RefObj
         if (r.height > 0) need = Math.max(need, r.bottom - top);
       }
       need += parseFloat(getComputedStyle(stage).paddingBottom) || 0;
-      const overflow = need > stageHeightPx() + 1;
+      const overflow = need > svhPx() + 1;
       section.toggleAttribute('data-overflow', overflow);
       // Lifting the flag grows the section for the measure; if scroll
       // anchoring moved the page meanwhile, put it back.
       if (wasOverflow && overflow && window.scrollY !== scrollY) window.scrollTo(0, scrollY);
+      if (overflow !== wasOverflow) requestRefresh();
     };
     const schedule = () => {
       if (!raf) raf = requestAnimationFrame(measure);
@@ -115,6 +107,17 @@ export interface ChapterProps {
   ref?: Ref<HTMLElement>;
   /** The .stage (sticky while the section scrolls L). */
   stageRef?: Ref<HTMLDivElement>;
+  /**
+   * Sticky progress p ∈ [0, 1] over L (flow: `top bottom` → `bottom top`) on
+   * every ScrollTrigger update (§5 timelines). Write refs / the store only.
+   */
+  onProgress?: UseChapterOptions['onProgress'];
+  /**
+   * Build the chapter's scroll choreography inside its gsap context (see
+   * useChapter's ChapterContext: transit-in windows, `track()` for focus-in).
+   * Declarative `[data-reveal]` elements need no callback.
+   */
+  reveal?: UseChapterOptions['reveal'];
 }
 
 /**
@@ -131,6 +134,11 @@ export interface ChapterProps {
  * Mark the stage content that must fit one screen with `data-fit`: a sticky
  * chapter whose [data-fit] content is taller than 100svh falls back to flow
  * (section[data-overflow]; see useStageFit).
+ *
+ * The chapter is wired to the store by useChapter (§9.3): its ScrollTrigger
+ * records the section and measures `[data-field-anchor]` / `[data-safe]` on
+ * refresh, `onProgress` gets its progress, and `reveal` / `[data-reveal]`
+ * build its reveals.
  */
 export default function Chapter({
   id,
@@ -146,6 +154,8 @@ export default function Chapter({
   children,
   ref,
   stageRef,
+  onProgress,
+  reveal,
 }: ChapterProps) {
   const spec: {
     L: number;
@@ -164,6 +174,7 @@ export default function Chapter({
   const sectionEl = useRef<HTMLElement | null>(null);
   const stageEl = useRef<HTMLDivElement | null>(null);
   useStageFit(sectionEl, stageEl);
+  useChapter(id, sectionEl, stageEl, { onProgress, reveal });
 
   const style: Record<string, string> = {};
   if (isSticky || isStickyShort) style['--chapter-l'] = `${length}vh`;

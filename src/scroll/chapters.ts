@@ -45,8 +45,31 @@ export const FOOTER_VH = 40;
 export const PROJECT_WINDOW_VH = 62.5;
 
 /**
+ * C3 window hold start, as local progress q within a window (§5 C3: the
+ * curtain ends and the hold begins at q .55/.56). Focus inside panel k
+ * scrolls to `projects + (k + q)·62.5vh` (§8.1).
+ */
+export const PROJECT_HOLD_Q = 0.56;
+
+/**
+ * The home film state each chapter shows at rest: its "poster" under
+ * reduced motion (§8.2), where the field crossfades between these instead of
+ * morphing. C3 shows S4–S7, one per panel (S4 + panel index). Numbers are
+ * StateId values (kept numeric so this file stays dependency-free).
+ */
+export const CHAPTER_STATE = {
+  top: 1,
+  about: 2,
+  work: 3,
+  projects: 4,
+  capabilities: 8,
+  contact: 9,
+} as const satisfies Record<HomeChapterId, number>;
+
+/**
  * Nav / rail / hash jump targets: the start of each chapter's hold, as an
- * offset in vh from the chapter top (§4.4).
+ * offset in vh from the chapter top (§4.4). The offset only applies while the
+ * chapter's stage is actually sticky; in flow the target is the section top.
  */
 export const JUMP_OFFSET_VH = { top: 0, about: 10, work: 0, capabilities: 10, contact: 0 } as const satisfies Partial<
   Record<HomeChapterId, number>

@@ -4,6 +4,8 @@ Personal portfolio for Stephen Webb, Senior Product Designer. The site is dark a
 
 **`docs/redesign/SPEC.md` is the source of truth.** The `§` references below point into it. If this file and the spec disagree, follow the spec and fix this file.
 
+The shared scroll ↔ field APIs (store, segments, director, anchors, field entry, per-state constants, QA params) and the per-tick ordering are pinned in **`docs/redesign/CONTRACTS.md`**. Change a contract signature only together with that file.
+
 ## Tech stack
 
 - **Framework**: React 19, TypeScript and Vite 7. Routing uses `react-router-dom` 7. Home is eager (the hero `<h1>` is the LCP); `/work/:slug` and the 404 are lazy and code-split. **Every route is prerendered at build time** (`scripts/prerender-plugin.mjs` renders `src/entry-server.tsx` for each entry in `src/routes.ts`), so the no-JS path has all copy and links, and `main.tsx` hydrates. Keep `window`/`document` access out of render (effects and handlers only).
@@ -40,6 +42,7 @@ src/
                           + App = BrowserRouter › AppShell
   entry-server.tsx        build-time prerender: StaticRouter › AppShell via react-dom/static
   routes.ts               routeKey(), PRERENDER_ROUTES (url, output file, title)
+  debugParams.ts          QA URL params (?debug=field, ?film=F, ?tier=, ?intro=0); window.__lenis / __field
   index.css               @theme tokens, custom variants, @layer base / components (see below)
   content/
     site.ts               EVERY home + shell string (Appendix A). Never hard-code copy in components.
@@ -51,12 +54,14 @@ src/
     lenis.ts, reveal.ts   (scroll phase)
   scroll/
     chapters.ts           document map: CHAPTERS (L, sticky flags), HOME_ORDER, JUMP_OFFSET_VH, headingId()
-    store.ts, segments.ts, director.ts, anchors.ts, useChapter.ts   (scroll phase, §9.2–9.6)
+    store.ts, segments.ts, director.ts, anchors.ts   contracts (docs/redesign/CONTRACTS.md), §9.2–9.6
+    useChapter.ts         (scroll phase)
   field/
     layout.ts             SINGLE SOURCE OF TRUTH for anchor boxes (vw/svh), desktop + mobile; CHART geometry,
                           card box, slot heights, MQ; resolveAnchor(); layoutCss(); applyLayoutVars()
     states/ids.ts         StateId (const object + type; enums are not allowed by erasableSyntaxOnly)
-    index.ts, FieldCanvas.tsx, engine.ts, tiers.ts, textures.ts, uniforms.ts, shaders/, states/s00…s10,
+    index.ts, uniforms.ts, tiers.ts   contracts: bootField/acquire/release, STATE_PARAMS, tier table
+    FieldCanvas.tsx, engine.ts, textures.ts, shaders/, states/s00…s10,
     worker/, fallback2d.ts, debug.ts   (engine phases)
   chapters/               Hero, About, CareerChart, Nda, Projects, ProjectPanel, Capabilities, Contact
   components/             Chapter, ChapterHeading, LinkLabel, Chip, SkipLink, Atmosphere, Nav, MobileMenu,

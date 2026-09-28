@@ -3,16 +3,33 @@ import { flushSync } from 'react-dom';
 import { Link, useLocation } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import { nav } from '../content/site';
+import { EASE, gsap } from '../motion/gsap';
+import { getLenis, onSample } from '../motion/lenis';
+import { isReducedMotion } from '../motion/motionPref';
 import { subscribeLayoutMode } from '../motion/useLayoutMode';
-import { isPlainClick, jumpToChapter, type JumpId } from '../scroll/jump';
+import { activeJumpIndex, isPlainClick, JUMP_ORDER, jumpTargets, jumpToChapter, type JumpId } from '../scroll/jump';
+import { store } from '../scroll/store';
 import LinkLabel from './LinkLabel';
 import MobileMenu, { type NavChapterId } from './MobileMenu';
 
 /** The scrim fades in once the page has scrolled this far (§6). */
 const SCRIM_AFTER_PX = 40;
+/** Scroll direction needs this much travel between two samples to count (wordmark collapse). */
+const DIRECTION_PX = 4;
+/** Desktop hero bottom (190vh) as a fallback before the hero is measured; one viewport off home. */
+const HERO_END_VH = 190;
+/** The menu's open animation (§6): the field fades to .3, then its loop stops. */
+const MENU_FADE_S = 0.4;
+const MENU_FIELD_OPACITY = 0.3;
 
 /**
- * Active-dot hook: Rail publishes the chapter in hold on
+ * Published on <html> while home is mounted: the chapter whose hold the page
+ * has reached ("top" … "contact"). Nav styles its active dot from it.
+ */
+const ACTIVE_ATTR = 'data-active-chapter';
+
+/**
+ * Active-dot hook: Nav publishes the chapter in hold on
  * html[data-active-chapter] (home only). Static strings, so Tailwind sees them.
  */
 const ACTIVE: Record<NavChapterId, { link: string; dot: string }> = {
@@ -36,7 +53,7 @@ const ACTIVE: Record<NavChapterId, { link: string; dot: string }> = {
 
 /**
  * "Stephen Webb" split for the collapse to "SW" after the hero (§6). The
- * folds are 1fr → 0fr grid tracks; the scroll phase sets data-collapsed on
+ * folds are 1fr → 0fr grid tracks over 500 ms; Nav sets data-collapsed on
  * the header. The accessible name stays the full name.
  */
 function Wordmark() {
@@ -57,11 +74,24 @@ function Wordmark() {
 }
 
 /**
- * Fixed nav (SPEC §6): 64px (56px mobile), never hides. A 96px (mobile 80px) void scrim
- * fades in after 40px of scroll (data-scrolled, set from a passive listener —
- * no React state per scroll). Wordmark → "/"; desktop chapter links with an
- * active dot and the Email pill; a Menu button opens the mobile overlay.
- * Chapter links jump in place on home and navigate to /#id elsewhere.
+ * Fixed nav (SPEC §6): 64px (56px mobile), never hides. Wordmark → "/";
+ * desktop chapter links with an active dot and the Email pill; a Menu button
+ * opens the mobile overlay. Chapter links jump in place on home with the
+ * §4.4 policy (glide within 2 film states, else a jump cut) and navigate to
+ * /#id elsewhere.
+ *
+ * Driven by the store at ≤ 10 Hz (motion/lenis.ts onSample), through
+ * attributes — no React state per scroll, no layout reads:
+ * - `data-scrolled`: the 96px (mobile 80px) void scrim after 40px of scroll;
+ * - `data-collapsed`: the wordmark folds to "SW" past the hero (y > its
+ *   bottom, 190vh on desktop) while scrolling down, and expands again on
+ *   upward scroll;
+ * - html[data-active-chapter]: the chapter whose hold the page has reached.
+ *
+ * The menu also drives the field (§6): opening fades `fx.opacity` to .3 over
+ * 400 ms, then sets `flags.menuOpen` (the engine stops its loop while it is
+ * set); closing clears the flag at once and fades back to 1. Lenis is
+ * stopped while the menu is open (the page behind it is scroll-locked).
  */
 export default function Nav() {
   const { pathname } = useLocation();
@@ -70,29 +100,82 @@ export default function Nav() {
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Scrim toggle: passive scroll listener, rAF-throttled, writes an attribute.
+  // Scrim, wordmark collapse and active dot: the ≤ 10 Hz store sampler.
   useEffect(() => {
     const header = headerRef.current;
     if (!header) return;
-    let raf = 0;
+    const root = document.documentElement;
+    const targets: number[] = [];
+    let version = -1;
+    let lastY = store.scroll.y;
     let scrolled: boolean | null = null;
-    const update = () => {
-      raf = 0;
-      const next = window.scrollY > SCRIM_AFTER_PX;
-      if (next === scrolled) return;
-      scrolled = next;
-      header.toggleAttribute('data-scrolled', next);
+    let collapsed: boolean | null = null;
+    let active: JumpId | null = null;
+
+    const sample = () => {
+      const y = store.scroll.y;
+      const H = store.scroll.H || window.innerHeight;
+
+      const nextScrolled = y > SCRIM_AFTER_PX;
+      if (nextScrolled !== scrolled) {
+        scrolled = nextScrolled;
+        header.toggleAttribute('data-scrolled', nextScrolled);
+      }
+
+      const hero = store.chapters.top;
+      const heroEnd = !onHome ? H : hero ? hero.top + hero.height : (HERO_END_VH * H) / 100;
+      const dy = y - lastY;
+      lastY = y;
+      let nextCollapsed = collapsed ?? y > heroEnd;
+      if (y <= heroEnd) nextCollapsed = false;
+      else if (dy > DIRECTION_PX) nextCollapsed = true;
+      else if (dy < -DIRECTION_PX) nextCollapsed = false;
+      if (nextCollapsed !== collapsed) {
+        collapsed = nextCollapsed;
+        header.toggleAttribute('data-collapsed', nextCollapsed);
+      }
+
+      if (!onHome) return;
+      if (store.version !== version) {
+        version = store.version;
+        jumpTargets(store, targets);
+      }
+      const k = activeJumpIndex(y, targets);
+      const next = k >= 0 ? JUMP_ORDER[k] : null;
+      if (next === active) return;
+      active = next;
+      if (next) root.setAttribute(ACTIVE_ATTR, next);
+      else root.removeAttribute(ACTIVE_ATTR);
     };
-    const onScroll = () => {
-      if (!raf) raf = requestAnimationFrame(update);
-    };
-    update();
-    window.addEventListener('scroll', onScroll, { passive: true });
+
+    const off = onSample(sample);
     return () => {
-      window.removeEventListener('scroll', onScroll);
-      cancelAnimationFrame(raf);
+      off();
+      if (onHome) root.removeAttribute(ACTIVE_ATTR);
     };
-  }, []);
+  }, [onHome]);
+
+  // The menu dims the field and stops its loop (§6); the page behind is locked.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const lenis = getLenis();
+    lenis?.stop();
+    const fade = isReducedMotion() ? 0 : MENU_FADE_S;
+    gsap.to(store.fx, {
+      opacity: MENU_FIELD_OPACITY,
+      duration: fade,
+      ease: EASE.outExpo,
+      overwrite: true,
+      onComplete: () => {
+        store.flags.menuOpen = true;
+      },
+    });
+    return () => {
+      store.flags.menuOpen = false;
+      gsap.to(store.fx, { opacity: 1, duration: isReducedMotion() ? 0 : MENU_FADE_S, ease: EASE.outExpo, overwrite: true });
+      getLenis()?.start();
+    };
+  }, [menuOpen]);
 
   // The menu never outlives its route or the mobile layout.
   useEffect(() => {

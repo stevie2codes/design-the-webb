@@ -1,8 +1,8 @@
 import type { MouseEvent } from 'react';
 import { footer, socials } from '../content/site';
-import { isReducedMotion } from '../motion/motionPref';
+import { rewind } from '../motion/lenis';
 import { headingId } from '../scroll/chapters';
-import { isPlainClick } from '../scroll/jump';
+import { focusQuietly, isPlainClick } from '../scroll/jump';
 import LinkLabel from './LinkLabel';
 import MotionToggle from './MotionToggle';
 
@@ -10,19 +10,19 @@ import MotionToggle from './MotionToggle';
 const LINK = 'link-line t-label text-ink';
 
 /**
- * Back to top (§5 C6): a link to #top, so it works without JS too (the
- * native fragment jump). With JS a plain click scrolls to 0 instead (instant
- * under reduced motion; the scroll phase replaces it with the 2.4s rewind,
- * §4.4) and moves focus to the top heading (the hero <h1>, else <main>) so
- * keyboard users land where the page now is (§8.2). Off home, #top does not
- * exist, so the same click just scrolls this page to its top.
+ * Back to top = the rewind (§4.4, §5 C6): a link to #top, so it works without
+ * JS too (the native fragment jump). With JS a plain click plays the whole
+ * film backward — `scrollTo(0)` over 2.4 s expo.inOut with the jump cut off
+ * and a 60 ms film damp (motion/lenis.ts `rewind`); instant under reduced
+ * motion — and moves focus to the top heading (the hero <h1>, else <main>) so
+ * keyboard users land where the page is going (§8.2). Off home, #top does not
+ * exist, so the same click just rewinds this page to its top.
  */
 function backToTop(event: MouseEvent<HTMLAnchorElement>): void {
   if (!isPlainClick(event)) return;
   event.preventDefault();
-  window.scrollTo({ top: 0, behavior: isReducedMotion() ? 'auto' : 'smooth' });
-  const target = document.getElementById(headingId('top')) ?? document.getElementById('main');
-  target?.focus({ preventScroll: true });
+  rewind();
+  focusQuietly(document.getElementById(headingId('top')) ?? document.getElementById('main'));
 }
 
 /**

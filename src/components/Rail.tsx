@@ -1,13 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { rail } from '../content/site';
-import { chapterTarget, jumpToChapter } from '../scroll/jump';
-
-/**
- * Published on <html> while home is mounted: the chapter whose hold the page
- * has reached ("top" … "contact"). Nav styles its active dot from it.
- */
-const ACTIVE_ATTR = 'data-active-chapter';
+import { onSample, scrollLimit } from '../motion/lenis';
+import { activeJumpIndex, jumpTargets, jumpToChapter } from '../scroll/jump';
+import { store } from '../scroll/store';
 
 /** Rail ticks sit evenly on the track; the fill maps scroll piecewise onto them. */
 const LAST = rail.length - 1;
@@ -22,11 +18,14 @@ const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
  *   k exactly when the page reaches chapter k's hold start.
  * - Mobile (and short landscape screens): a 2px ember progress bar under the nav.
  *
+ * Ticks jump with the §4.4 policy (glide within 2 film states, else a jump
+ * cut; instant under reduced motion) and move focus to the chapter heading.
  * Hidden without JS: the ticks are buttons and the fill is scripted.
  *
- * One passive scroll listener, rAF-throttled, writes transforms and
- * attributes through refs: no React render per frame. Chapter targets are
- * re-measured only when the document resizes (ResizeObserver on <body>).
+ * Driven by the store at ≤ 10 Hz (motion/lenis.ts onSample): transforms and
+ * attributes through refs, no React render and no layout reads per sample.
+ * Targets are the chapters' hold starts from `store.chapters` (measured on
+ * refresh); a 100 ms linear transition smooths the fill between samples.
  */
 export default function Rail() {
   const { pathname } = useLocation();
@@ -36,28 +35,12 @@ export default function Rail() {
   const tickRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   useEffect(() => {
-    const root = document.documentElement;
     if (!onHome) return;
-
-    let targets: number[] = [];
-    let maxScroll = 1;
+    const targets: number[] = [];
+    let version = -1;
     let active = -1;
-    let raf = 0;
-
-    const measure = () => {
-      maxScroll = Math.max(1, root.scrollHeight - window.innerHeight);
-      const raw = rail.map((item) => chapterTarget(item.id));
-      if (raw.some((t) => t === null)) {
-        targets = []; // home is still rendering
-        return;
-      }
-      // Monotonic and reachable, so every tick can be reached by the fill.
-      targets = [];
-      for (let i = 0; i < raw.length; i++) {
-        const prev = i === 0 ? -1 : targets[i - 1];
-        targets.push(Math.max(prev + 1, Math.min(raw[i] as number, maxScroll)));
-      }
-    };
+    let lastFill = -1;
+    let lastBar = -1;
 
     const setActive = (k: number) => {
       if (k === active) return;
@@ -67,44 +50,40 @@ export default function Rail() {
       const next = tickRefs.current[k];
       next?.setAttribute('data-active', '');
       next?.setAttribute('aria-current', 'true');
-      if (k >= 0) root.setAttribute(ACTIVE_ATTR, rail[k].id);
-      else root.removeAttribute(ACTIVE_ATTR);
       active = k;
     };
 
-    const update = () => {
-      raf = 0;
-      const y = window.scrollY;
-      const docP = clamp01(y / maxScroll);
-      if (barRef.current) barRef.current.style.transform = `scaleX(${docP})`;
+    const sample = () => {
+      if (store.version !== version) {
+        version = store.version;
+        jumpTargets(store, targets);
+      }
+      const y = store.scroll.y;
+      const max = scrollLimit();
+      const docP = max > 0 ? clamp01(y / max) : 0;
 
       let p = docP;
-      let k = -1;
-      if (targets.length === rail.length) {
-        k = 0;
-        for (let i = 1; i <= LAST; i++) if (y >= targets[i] - 2) k = i;
+      const k = activeJumpIndex(y, targets);
+      if (k >= 0) {
         p = k === LAST ? 1 : (k + clamp01((y - targets[k]) / (targets[k + 1] - targets[k]))) / LAST;
       }
-      if (fillRef.current) fillRef.current.style.transform = `scaleY(${p})`;
+      // Round to 1/1000 so an idle page writes nothing.
+      const fill = Math.round(p * 1000) / 1000;
+      const bar = Math.round(docP * 1000) / 1000;
+      if (fill !== lastFill && fillRef.current) {
+        lastFill = fill;
+        fillRef.current.style.transform = `scaleY(${fill})`;
+      }
+      if (bar !== lastBar && barRef.current) {
+        lastBar = bar;
+        barRef.current.style.transform = `scaleX(${bar})`;
+      }
       setActive(k);
     };
 
-    const onScroll = () => {
-      if (!raf) raf = requestAnimationFrame(update);
-    };
-    const ro = new ResizeObserver(() => {
-      measure();
-      onScroll();
-    });
-    ro.observe(document.body);
-    window.addEventListener('scroll', onScroll, { passive: true });
-    measure();
-    update();
-
+    const off = onSample(sample);
     return () => {
-      ro.disconnect();
-      window.removeEventListener('scroll', onScroll);
-      cancelAnimationFrame(raf);
+      off();
       setActive(-1);
     };
   }, [onHome]);
@@ -116,7 +95,11 @@ export default function Rail() {
       {/* Desktop rail */}
       <div className="fixed top-1/2 right-6 z-30 h-[40vh] w-px -translate-y-1/2 mobile:hidden short:hidden nojs:hidden">
         <div aria-hidden="true" className="absolute inset-0 bg-line-strong">
-          <div ref={fillRef} className="absolute inset-0 origin-top bg-ember" style={{ transform: 'scaleY(0)' }} />
+          <div
+            ref={fillRef}
+            className="absolute inset-0 origin-top bg-ember transition-transform duration-100 ease-linear rm:transition-none"
+            style={{ transform: 'scaleY(0)' }}
+          />
         </div>
         {rail.map((item, i) => (
           <button
@@ -151,7 +134,11 @@ export default function Rail() {
         aria-hidden="true"
         className="pointer-events-none fixed inset-x-0 top-14 z-40 hidden h-0.5 mobile:block short:block desktop:short:top-16 nojs:hidden"
       >
-        <div ref={barRef} className="h-full origin-left bg-ember" style={{ transform: 'scaleX(0)' }} />
+        <div
+          ref={barRef}
+          className="h-full origin-left bg-ember transition-transform duration-100 ease-linear rm:transition-none"
+          style={{ transform: 'scaleX(0)' }}
+        />
       </div>
     </>
   );
