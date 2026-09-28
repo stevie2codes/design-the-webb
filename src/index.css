@@ -628,14 +628,14 @@
   }
 
   /* ── Text-safe scrim (§2.3) ────────────────────────────────────────────────
-     Every text block over the field carries [data-safe]: a void scrim 64px
+     Every text block over the field carries [data-safe]: a void scrim 48px
      beyond the block, feathered on all four edges. The field also dims
      particles inside these rects (text-safe mask). .scrim is an alias.
-     - The feather is an eased (smootherstep) ramp over 64px, not §2.3's
-       linear 48px: a linear ramp starts and stops abruptly, and together
-       with the shader mask's ramp it read as a dark box cut into the field.
-       The fully opaque core still starts at the block's edge
-       (CONTRACTS.md tuning notes).
+     - The 48px feather is an eased (smootherstep) ramp, not a linear one: a
+       linear ramp starts and stops abruptly (Mach bands), and together with
+       the shader mask's ramp it read as a hard dark box cut into the field
+       (CONTRACTS.md tuning notes). It is not wider: the hero eyebrow sits
+       20–50px above the name's cap line.
      - No `isolation`: every ::before (z −1) drops into the stacking context
        of <main> (relative z-2), so all scrims paint beneath all text and
        above the canvas; a later block's scrim can never dim earlier text.
@@ -650,17 +650,17 @@
   }
   [data-safe]::before,
   .scrim::before {
-    /* smootherstep(t) at t = 0, 1/8 … 1, over 64px from each edge */
+    /* smootherstep(t) at t = 0, 1/8 … 1, over 48px from each edge */
     --scrim-in:
-      transparent, rgb(0 0 0 / 0.011) 8px, rgb(0 0 0 / 0.104) 16px, rgb(0 0 0 / 0.262) 24px,
-      rgb(0 0 0 / 0.5) 32px, rgb(0 0 0 / 0.738) 40px, rgb(0 0 0 / 0.896) 48px, rgb(0 0 0 / 0.989) 56px, #000 64px;
+      transparent, rgb(0 0 0 / 0.011) 6px, rgb(0 0 0 / 0.104) 12px, rgb(0 0 0 / 0.262) 18px,
+      rgb(0 0 0 / 0.5) 24px, rgb(0 0 0 / 0.738) 30px, rgb(0 0 0 / 0.896) 36px, rgb(0 0 0 / 0.989) 42px, #000 48px;
     --scrim-out:
-      #000 calc(100% - 64px), rgb(0 0 0 / 0.989) calc(100% - 56px), rgb(0 0 0 / 0.896) calc(100% - 48px),
-      rgb(0 0 0 / 0.738) calc(100% - 40px), rgb(0 0 0 / 0.5) calc(100% - 32px), rgb(0 0 0 / 0.262) calc(100% - 24px),
-      rgb(0 0 0 / 0.104) calc(100% - 16px), rgb(0 0 0 / 0.011) calc(100% - 8px), transparent;
+      #000 calc(100% - 48px), rgb(0 0 0 / 0.989) calc(100% - 42px), rgb(0 0 0 / 0.896) calc(100% - 36px),
+      rgb(0 0 0 / 0.738) calc(100% - 30px), rgb(0 0 0 / 0.5) calc(100% - 24px), rgb(0 0 0 / 0.262) calc(100% - 18px),
+      rgb(0 0 0 / 0.104) calc(100% - 12px), rgb(0 0 0 / 0.011) calc(100% - 6px), transparent;
     content: "";
     position: absolute;
-    inset: -64px max(-64px, calc(-1 * var(--gutter)));
+    inset: -48px max(-48px, calc(-1 * var(--gutter)));
     z-index: -1;
     pointer-events: none;
     background-color: rgb(5 5 7 / 0.82);
@@ -854,7 +854,8 @@
      The system palette owns every colour: the name is never masked (the
      field that would stand in for it is not drawn — FieldCanvas does not
      boot it), and the decorative layers go, including the scrims, which
-     would otherwise be recoloured into bright slabs. */
+     would otherwise be recoloured into bright slabs, and the scroll cue
+     (nothing resolves without the field). */
   @media (forced-colors: active) {
     .scan-print {
       -webkit-mask-image: none;
@@ -863,7 +864,8 @@
     .field-root,
     .atmo,
     [data-safe]::before,
-    .scrim::before {
+    .scrim::before,
+    [data-scroll-cue] {
       display: none;
     }
   }

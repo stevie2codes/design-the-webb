@@ -143,12 +143,20 @@ Adding a state takes three things: a generator in `states/sNN-*.ts`, a `live()` 
 | `FieldHandle.ready` | three loaded, fonts loaded, S0 + S1 built, one frame rendered (§6) |
 | `FieldHandle.intro` | `{ run(): Promise<void>, skip(), running }`: the §6 intro (it runs by itself; any wheel / touch / key / pointerdown skips it) |
 | `FieldHandle.print(on)` | Force the §9.5 print (normally automatic from `frame.lockEdge`) |
-| `FieldHandle.stats()` | `→ FieldStats \| null`: tier, texture tier, drawRange, dpr, glow, bokeh cap, fps, rendered frames, canvas and generated-for size, film ceiling, resident states, adaptive steps fired, context-loss state, S1 source / font / ms |
+| `FieldHandle.stats()` | `→ FieldStats \| null`: tier, texture tier, drawRange, dpr, glow, bokeh cap, fps, rendered frames, canvas and generated-for size, film ceiling, resident states, adaptive steps fired, context-loss state, S1 source / font / ms / scale (the S1 anchor's width now ÷ at sampling: 1 when registered, see below) |
+| `INTRO_ATTR`, `isIntroPending()`, `clearIntroPending()` | `html[data-intro]`: `"pending"` is the pre-paint script's guess that the §6 intro will run (JS, not rm, `/`, no `?intro=0` / `?film`, no forced colors); the engine replaces it with `"running"` (choreo) or drops it (`clearIntroPending`: no intro, dispose), and so does FieldCanvas when no renderer starts or forced colors are on. The HUD reads 1.00 while it is pending. |
 | `FieldDebugHandle.ready`, `.stats()` | QA waits with `waitForFunction(() => window.__field?.ready)` |
 
-`FieldCanvas` (field/FieldCanvas.tsx) is the only mount: `#field-root` with one aria-hidden `<canvas style="opacity:0">` (identical on the server). It acquires in an idle callback (≤ 800 ms), releases on unmount, forwards the motion preference to `setMode`, subscribes `invalidate()` to every scroll write (`subscribeScroll`), samples the HUD once the field is ready, and sets `store.mode = 'css'` when no renderer starts (kind `'none'`: the CSS glow on `body::before` stays the backdrop).
+`FieldCanvas` (field/FieldCanvas.tsx) is the only mount: `#field-root` with one aria-hidden `<canvas style="opacity:0">` (identical on the server). It acquires in an idle callback (≤ 800 ms), releases on unmount, forwards the motion preference to `setMode`, subscribes `invalidate()` to every scroll write (`subscribeScroll`), samples the HUD once the field is ready, and sets `store.mode = 'css'` when no renderer starts (kind `'none'`: the CSS glow on `body::before` stays the backdrop). Under `forced-colors: active` it never boots the field (and releases a running one when the mode turns on; it boots again when it turns off); index.css unmasks the `<h1>` and hides the canvas, the atmosphere, the scrims and the scroll cue there.
 
 Engine boot details: it bootstraps `store.scroll.W / H` only if they are still 0, and sets the `?film` override only if the scroll side has not (same value). Worker jobs carry `GenerateRequest.supersede` (default true: a new job drops the queue; lazy single-state jobs pass false and queue behind it).
+
+Engine runtime details:
+
+- **S1 registration (§9.8).** S1 registers to the DOM glyphs, not the viewport, and the `<h1>` rescales with `--name-fs` on every resize — below the §9.7 regeneration thresholds too. Each `NameSample` records the S1 anchor size it was sampled at (`anchorW / anchorH`). On every store refresh (and after the resize debounce) the engine compares it with `store.anchors.get(S1)`; past 0.5px it resamples S1 in place (an idle callback, two same-size texture uploads, the set's generation size kept). Until that lands, S1's `uOff.z` (and the beam's `nameSpan`) is multiplied by `anchorW now / anchorW sampled`, so the interim frame is registered too. A pending regeneration resamples S1 into its own set instead.
+- **Reduced motion is on demand (§8.2, §8.5).** `renderFrame` leaves the gsap ticker once a frame finds the field settled with no invalidation window open, so gsap's autoSleep stops the rAF loop at rest. `invalidate()`, `wake('scroll' | 'state')`, `setMode`, `resume` and a context restore put it back (`gsap.ticker.add` wakes a sleeping ticker). Invalidations open their 300 ms window on the next frame's clock, because `gsap.ticker.time` is stale while the ticker sleeps. Full motion keeps `renderFrame` on the ticker for good.
+- **DPR follows the screen.** A `(resolution: Ndppx)` query, re-armed after each change, updates the renderer's pixel ratio (`min(devicePixelRatio, the tier cap)`) when the window moves to another screen or the zoom changes — unless the adaptive `dpr` step has fired.
+- **Context restore** re-applies the void clear colour: three's `initGLContext()` rebuilds `WebGLBackground` with black.
 
 ### `src/debugParams.ts`: shared; status real
 
@@ -192,7 +200,7 @@ Each tick then runs:
    - Scrubbed DOM (`scrub: true`, `ease: 'none'`).
    - Chapter `onUpdate` writes `chapters[id].progress` and the scrubbed fx (`disperse`, `sink`).
    - `onToggle` writes `active`.
-3. **`Timeline.updateRoot`** renders every time-based gsap tween. Examples: the print tween writing `fx.scanX` and `--scan`; `fx.printed`, `fx.exposure` and `fx.nova`; the intro override `m`; the UI's charge and groupW targets.
+3. **`Timeline.updateRoot`** renders every time-based gsap tween. Examples: the print tween writing `fx.scanX` and `--scan`; `fx.printed`, `fx.exposure` and `fx.nova`; the UI's charge and groupW targets. The §6 intro timeline runs on its own clamped clock instead: its stepper is registered **prioritized** (`gsap.ticker.add(stepIntro, false, true)`), so it runs at the very start of the tick — before `lenisRaf` — and the same tick's `renderFrame` draws its beam, `printed` and override `m` in the paint that shows its `--scan`.
 4. **Other normal-priority listeners**, such as the cursor ring and the ≤ 10 Hz HUD sampler. Their relative order doesn't matter, because they read the previous frame.
 5. **`renderFrame(time, deltaMs)`** (engine):
    1. `const f = director.tick(store, deltaMs / 1000, time)`. This computes F, the pair, entering params, aperture, anchor transforms, safe rects, the damped fx and pointer, and the lock edge. The director damps fx here, *before* the uniform writes, which removes the one-frame lag of the §9.5 order.
@@ -217,10 +225,18 @@ Under reduced motion there is no Lenis. A passive `scroll` listener writes `stor
 
 ### `src/motion/lenis.ts`: owner scroll; status real
 
+**The motion layer is lazy (§8.5 initial JS ≤ 140 KB gz).** gsap, ScrollTrigger and Lenis never enter the initial bundle:
+
+- `motion/lenis.ts` is the **facade** in the initial bundle: the API below, the listener sets (`subscribeScroll`, `onScrollRefresh`, `onSample`) and native fallbacks. It imports neither `gsap` nor `lenis` (types only).
+- `motion/scrollRuntime.ts` is the lazy chunk with the implementation (Lenis, the ScrollTrigger wiring, the scrollTo helpers, the sampler scheduling). `useSmoothScroll()` loads it right after hydration; the facade delegates once it has loaded. Before that (or if the chunk fails) `glide` / `jumpCut` / `rewind` / `scrollInstant` scroll natively and instantly, `requestRefresh` is a no-op (the runtime's start refreshes), `getLenis()` is null and `isSmooth()` false.
+- `motion/lazy.ts`: `loadGsap()`, `loadScroll()`, `loadReveal()` (cached promises, retry after a failed load), `scrollRuntime()` (sync, null until loaded), `reportLoadError`.
+- `motion/gsap.ts` is itself lazy-only: gsap + ScrollTrigger, the four custom eases registered with `gsap.registerEase` from `motion/tokens.ts` (a cubic-bézier solver; no CustomEase), `ScrollTrigger.config({ ignoreMobileResize: true })`. Only lazy chunks import it statically (the scroll runtime, the field engine, the reveal helpers). Initial-bundle code gets it through `loadGsap()` (Nav's menu fade, CursorRing's ticker).
+- `motion/tokens.ts` (initial bundle, pure): `EASE`, `DUR`, `LOOP`, `BEZIER`, `cubicBezier()`.
+
 | Symbol | Signature |
 |---|---|
-| `useSmoothScroll()` | Mount once in the App shell (`<ScrollInfra />`, first). Ref-counted, StrictMode-safe. |
-| `LENIS_OPTIONS` | §7.6 plus `respectReducedMotion: false` (the site resolves reduced motion itself; a visitor who chose Full on a reduced-motion OS still gets smooth scroll) |
+| `useSmoothScroll()` | Mount once in the App shell (`<ScrollInfra />`, first). Loads the runtime; ref-counted, StrictMode-safe (acquire / release chain on the same promise, so their order holds). |
+| `LENIS_OPTIONS` | (in `scrollRuntime.ts`) §7.6 plus `respectReducedMotion: false` (the site resolves reduced motion itself; a visitor who chose Full on a reduced-motion OS still gets smooth scroll) |
 | `getLenis()`, `isSmooth()`, `scrollLimit()` | Access |
 | `glide(y, { duration?, onComplete? })` | §4.4 glide, 1.2 s expo.inOut; instant without Lenis |
 | `jumpCut(y, { onCut? })` | §4.4 jump cut: overlay in 300 ms → immediate scroll + `ScrollTrigger.update()` + `snapFilm` → overlay out 400 ms. It never tweens `fx.opacity` (the opaque z-60 overlay already covers the canvas). |
@@ -237,8 +253,9 @@ Wiring (§9.5): `gsap.ticker.add(lenisRaf, false, true)`, `lagSmoothing(0)`; the
 
 ### `src/motion/reveal.ts`, `src/scroll/useChapter.ts`, `src/components/Chapter.tsx`: owner scroll
 
-- `lineMask(el, opts)` and `fadeUp(els, opts)`, scrubbed or timed; both return a `Reveal` (`complete()`, `revert()`) or `null` under reduced motion.
-- `useChapter(id, sectionRef, stageRef, { onProgress, reveal })`, `ChapterContext` (`window(el, from, to)`, `track()`, `isSticky()`), `REVEAL_WINDOWS`. `<Chapter>` forwards `onProgress` and `reveal`; the fit guard requests a refresh when it flips.
+- `lineMask(el, opts)` and `fadeUp(els, opts)`, scrubbed or timed; both return a `Reveal` (`complete()`, `revert()`) or `null` under reduced motion. `reveal.ts` registers SplitText and is its own lazy chunk: never import it statically from initial-bundle code; chapters get the helpers from their context.
+- `useChapter(id, sectionRef, stageRef, { onProgress, reveal })`, `ChapterContext` (`gsap`, `ScrollTrigger`, `lineMask`, `fadeUp`, `window(el, from, to)`, `track()`, `isSticky()`), `REVEAL_WINDOWS`. `<Chapter>` forwards `onProgress` and `reveal`; the fit guard requests a refresh when it flips.
+- useChapter builds, once the runtime has loaded, **one `gsap.context` scoped to the section**, rebuilt (reverted) when reduced motion or the layout changes and on unmount — the §9.10 `useGSAP({ scope, dependencies })` rule without `@gsap/react`, which would pull gsap into the initial bundle. It loads the reveal chunk only when the chapter has `[data-reveal]` elements or a `reveal` callback (full motion); otherwise `ctx.lineMask` / `ctx.fadeUp` return null.
 - Declarative reveals: `data-reveal="lines" | "up"`, optional `data-reveal-window="from,to"` (viewport %) and `data-reveal-timed`. Focus-in (§8.1) completes a chapter's reveals and glides to its hold (C3: the focused panel's window hold). **Never line-mask `ChapterHeading`**: SplitText's `aria: 'auto'` would put the hidden "01 — " into the accessible name.
 - Phase 2 uses reveals only where §5 C0 has them — none: the hero's eyebrow, lede and CTAs never move, and the scroll cue fades through `onProgress` (p .02 → .08). The other chapters' `data-reveal` attributes (About, NDA, Capabilities, Contact per §5) land with their choreography in phase 3.
 
@@ -262,6 +279,7 @@ The App's `ScrollToHash` routes every route-change scroll through these: no hash
 | `data-field="live"` | engine | The WebGL field is drawing (scrims on, `field-live:`) |
 | `data-field-states="0 1 …"` | engine | Resident state ids. The `field-s2:` … `field-s9:` and `no-field-s10:` variants hide each DOM stand-in (chart SVG bars, NDA slabs, emblem outlines, stack plates, beacon shell, the 404 hairline, the ROWS counter's visibility) only once **its own** state draws, so a state whose generator has not landed never leaves a hole. |
 | `data-tier` | engine | Drawn tier (animated grain on High) |
+| `data-intro="pending"` | pre-paint script (index.html) | The §6 intro is expected; the `intro:` variant hides the scroll cue (a CSS failsafe shows it after 4 s), the HUD reads 1.00. Dropped by the engine / FieldCanvas when no intro follows. |
 | `data-intro="running"` | engine | The §6 intro runs; the `intro:` variant hides the scroll cue until it ends |
 | `data-active-chapter` | Nav | For CSS hooks |
 
@@ -281,4 +299,14 @@ Tuned on headless SwiftShader screenshots at 1440×900 (DPR 1 and 2, High and Mi
 | `uniforms.ts` S1 density | .6 | .42 | The resolved particle name reads as bone light, not grey sand |
 | `live.glsl` `NAME_GRAIN_SIZE` | glyph grains × 1.45 | 1.5px pinpoints | Same reason; still pinpoints |
 | `live.glsl` printed halo | fill α → 0; edge grains become soft Gaussian sprites (`vSoft`) at size × 4.2 (× 3.0 on Low), α × .085, ramp + .08 (toward ember); band and hairline keep α ×.45 / size ×1.5 | α ×.45, size ×1.5 for all | The crisp DOM type covers every particle inside the glyphs, so the spec's halo never showed. Edge sprites bloom past the glyph edges: the printed name glows warmly, and the interior fill costs no fill rate. |
-| `choreo.ts` intro clock | its own clock, ≤ 50 ms per tick | gsap global time | `lagSmoothing(0)` (for Lenis) let one long frame (a shader compile, a busy main thread) skip the whole 2.3 s title card; now it slows down instead. The engine also renders its first frame (compiling the programs) before starting the intro. |
+| `choreo.ts` intro clock | its own clock, ≤ 50 ms per tick, stepped first in the tick | gsap global time | `lagSmoothing(0)` (for Lenis) let one long frame (a shader compile, a busy main thread) skip the whole 2.3 s title card; now it slows down instead. The engine sets the intro override, then renders its first frame (compiling the programs, canvas still at 0), so the first visible frame and the HUD's first reading are the printed S1 (1.00). |
+
+Phase 2 review fixes (tuned on the same setup, measured with the canvas-only luminance sampler and the `?debug=field` overlay):
+
+| Where | Value | Spec | Why |
+|---|---|---|---|
+| `tiers.ts` warm-up probe (`PROBE`, `probeVerdict`) | refresh interval = p10 of the 45 deltas; slow if > 25% of frames exceed 1.5 intervals, or the interval itself exceeds 1000/48 ms | p75 > 14 ms | A rAF delta never undercuts the vsync interval: at 60 Hz (external monitors, MacBook Airs) every frame is 16.7 ms however light the load, so the literal rule demoted every such High desktop to Mid. The new rule judges dropped frames; 60–144 Hz at every vsync → ok, a steady 30 fps render or ≥ 25% drops → slow. |
+| shader text-safe mask (`SAFE_ALPHA_MAX`) | α ×.22 as specced, then capped at an absolute .06 (and no extra brightness) inside a rect | ×.22 only | After `FIELD_GAIN` 3 one crisp S1 grain kept ~.4 α behind text; the sampler read up to `#5b5959` (4.3× the `#262A34` budget). With the cap the canvas-only maximum behind every hero rect stays ≤ `#222224` (L .016 vs .023; High, Mid, Low, 1440 × 900 and 390 × 844) across seg0 and the lock. |
+| shader mask feather, `[data-safe]::before` feather | smootherstep over 24px (shader) and 48px (scrim, 8 eased stops) | linear 24px / 48px | Linear ramps start and stop abruptly (Mach bands): the scrimmed blocks read as hard dark boxes. Kept at the specced widths: the hero eyebrow sits 20–50px above the name's cap line, so a wider ramp dims the particle name's top. |
+| shader loupe (`LOUPE_CORE`) | `loupe = amt · (1 − smoothstep(.35r, r, d))`; z → `uFocusZ` by .95·loupe; CoC → 1 by loupe; brightness +30% by loupe | z → 0 by .85·(1 − d/r)² | The quadratic pull only focused ~5–11 px around the pointer, under the 24 px ring: the loupe was invisible. Now the inner 35% of r (≈ 38 px at 900 px tall) is fully sharp with a soft edge. |
+| `live.glsl` scan beam | ramp + .5 within the beam (bone → ember → p-core) as well as brightness ×2.8 | brightness only | §10 "an ember scan beam", §2.1 p-core "scan flash": the brightness-only beam read as a white band on the grains. |

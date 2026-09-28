@@ -10,7 +10,7 @@ The shared scroll ↔ field APIs (store, segments, director, anchors, field entr
 
 - **Framework**: React 19, TypeScript and Vite 7. Routing uses `react-router-dom` 7. Home is eager (the hero `<h1>` is the LCP); `/work/:slug` and the 404 are lazy and code-split. **Every route is prerendered at build time** (`scripts/prerender-plugin.mjs` renders `src/entry-server.tsx` for each entry in `src/routes.ts`), so the no-JS path has all copy and links, and `main.tsx` hydrates. Keep `window`/`document` access out of render (effects and handlers only).
 - **Styling**: Tailwind CSS v4 through `@tailwindcss/vite`. There is no `tailwind.config.js`.
-- **Motion**: GSAP 3.14 (ScrollTrigger, SplitText, CustomEase) with `@gsap/react` `useGSAP`. Smooth scroll is Lenis 1.3, on the desktop full-motion path only.
+- **Motion**: GSAP 3.14 (ScrollTrigger, SplitText; the four custom eases are cubic-béziers registered with `gsap.registerEase`, no CustomEase). Smooth scroll is Lenis 1.3, on the desktop full-motion path only. **The whole motion layer is lazy-loaded after hydration** (§8.5 initial JS budget): nothing in the initial bundle imports `gsap`, `lenis` or `motion/gsap.ts` statically (see `motion/lazy.ts`). `@gsap/react` is not used (its `useGSAP` imports gsap statically); useChapter builds an equivalent scoped `gsap.context`.
 - **Field**: vanilla `three` 0.186 with one `THREE.Points` object and a GLSL3 `ShaderMaterial`. It is **dynamically imported after first paint** and never enters the initial bundle. The Canvas2D fallback never imports three.
 - **Fonts**: self-hosted through fontsource and imported in `src/main.tsx`:
   - Archivo Variable, including its width axis
@@ -34,7 +34,8 @@ The shared scroll ↔ field APIs (store, segments, director, anchors, field entr
 ## Module layout (§9.1)
 
 ```
-index.html                pre-paint script: no-js→js, html.rm, html[data-layout]; scrollRestoration manual
+index.html                pre-paint script: no-js→js, html.rm, html[data-layout], html[data-intro="pending"];
+                          scrollRestoration manual
 src/
   main.tsx                fontsource + lenis.css + index.css; applyLayoutVars(); init motion/layout sync;
                           hydrateRoot when #root[data-ssr] matches routeKey(pathname), else createRoot
@@ -48,17 +49,22 @@ src/
     site.ts               EVERY home + shell string (Appendix A). Never hard-code copy in components.
     projects.ts           side projects: verbatim copy + index, emblem StateId, side, screenshot w/h
   motion/
-    gsap.ts               the only place plugins are registered; exports gsap, ScrollTrigger, SplitText, useGSAP, EASE, DUR
+    tokens.ts             EASE, DUR, LOOP, BEZIER + cubicBezier() (pure; safe in the initial bundle)
+    lazy.ts               loadGsap() / loadScroll() / loadReveal() / scrollRuntime(): the lazy motion chunks
+    gsap.ts               LAZY ONLY: registers ScrollTrigger + the custom eases; exports gsap, ScrollTrigger, EASE, DUR
     motionPref.ts         reduced motion (OS + footer toggle, localStorage 'dtw:motion'), html.rm, useMotionPref()
     useLayoutMode.ts      'desktop' | 'mobile' (MQ.mobile), html[data-layout], useLayoutMode()
-    lenis.ts              Lenis singleton + ticker wiring, useSmoothScroll(), glide / jumpCut / rewind /
-                          scrollInstant, subscribeScroll, onSample (≤ 10 Hz) / sampleNow, requestRefresh
-    reveal.ts             lineMask(el, opts) and fadeUp(els, opts): scrubbed or timed; null under reduced motion
+    lenis.ts              FACADE (initial bundle): useSmoothScroll(), glide / jumpCut / rewind / scrollInstant,
+                          subscribeScroll, onScrollRefresh, onSample (≤ 10 Hz) / sampleNow, requestRefresh;
+                          native fallbacks until the runtime has loaded
+    scrollRuntime.ts      LAZY: Lenis singleton + ticker wiring, ScrollTrigger refresh wiring, the helpers' bodies
+    reveal.ts             LAZY (SplitText): lineMask(el, opts) and fadeUp(els, opts); chapters get them from ctx
   scroll/
     chapters.ts           document map: CHAPTERS (L, sticky flags), HOME_ORDER, JUMP_OFFSET_VH, headingId()
     store.ts, segments.ts, director.ts, anchors.ts   contracts (docs/redesign/CONTRACTS.md), §9.2–9.6
     useChapter.ts         section ScrollTrigger → store (onRefresh is the only layout read), [data-reveal]
-                          reveals, onProgress / reveal callbacks, focus-in glide to the hold
+                          reveals, onProgress / reveal(ctx) callbacks (ctx.gsap, ctx.ScrollTrigger, ctx.lineMask,
+                          ctx.fadeUp), focus-in glide to the hold; one gsap.context per chapter
     jump.ts               §4.4 jump policy (glide ≤ 2 states, else jump cut), focusQuietly, onJumpLinkClick
   field/
     layout.ts             SINGLE SOURCE OF TRUTH for anchor boxes (vw/svh), desktop + mobile; CHART geometry,
@@ -99,6 +105,7 @@ scripts/                  gen-layout-css.mjs, make-grain.mjs, prerender-plugin.m
   - Full mobile: native scroll, only C0 and C5 sticky, WebGL Low tier, field slots.
   - Reduced motion: no Lenis, flow layout, still posters.
   - No WebGL: Canvas2D fallback.
+  - Forced colors (Windows High Contrast): no field at all; the `<h1>` is never masked and the scrims, atmosphere and scroll cue are hidden.
   - No JS: CSS glow backdrop.
 
 ## Rules
@@ -115,8 +122,8 @@ scripts/                  gen-layout-css.mjs, make-grain.mjs, prerender-plugin.m
   - Ember text is never smaller than 12px.
   - Ink on ember is forbidden.
 - **Focus.** Every hover effect also fires on `:focus-visible`, and touch targets are at least 44px.
-- **Performance.** Initial JS is ≤ 140 KB gzipped. three goes in its own chunk. Images always carry `width` and `height`.
-- **Motion.** Use GSAP only through `src/motion/gsap.ts`, and create triggers inside `useGSAP({ scope, dependencies: [reducedMotion, layout] })`. Every scrubbed tween uses `ease: 'none'` with `scrub: true`.
+- **Performance.** Initial JS is ≤ 140 KB gzipped (≈ 110 KB today). three goes in its own chunk, and so does the motion layer. Images always carry `width` and `height`.
+- **Motion.** Use GSAP only through `src/motion/gsap.ts`, and only from lazy code: in initial-bundle code (components, chapters, scroll/) get it with `loadGsap()` / `loadScroll()`, or from a chapter's `reveal(ctx)` context (`ctx.gsap`, `ctx.ScrollTrigger`, `ctx.lineMask`, `ctx.fadeUp`). Chapter triggers live in useChapter's per-chapter `gsap.context` (rebuilt on reduced-motion / layout changes). Import motion constants from `motion/tokens.ts`. Every scrubbed tween uses `ease: 'none'` with `scrub: true`.
 
 ## Design system (`src/index.css`)
 
@@ -165,14 +172,14 @@ scripts/                  gen-layout-css.mjs, make-grain.mjs, prerender-plugin.m
   - `rm:` means reduced motion.
   - `field-live:` and `no-field:` follow whether the WebGL field is drawing.
   - `field-s2:` … `field-s9:` and `no-field-s10:` follow whether the field draws **that state** (`html[data-field-states]`). Use them to hide a state's DOM stand-in (chart SVG bars, emblem outlines…), never `field-live:`, so a state whose generator has not landed never leaves a hole.
-  - `intro:` applies while the §6 intro runs (`html[data-intro="running"]`).
+  - `intro:` applies while the §6 intro is expected or runs (`html[data-intro="pending"]` from the pre-paint script until the engine decides, then `"running"`).
   - **`staged:`** applies only inside a chapter whose stage is actually sticky right now. Use it for stacked or absolute stage layouts that must fall back to flow under no-js and rm.
 
 **Component classes:**
 - `.chapter` / `.stage`: rendered by `<Chapter>`; see below.
 - `[data-field-anchor="Sx"]`: positioned from the `--anchor-<state>-x|y|w|h` variables.
 - `.field-slot[data-slot=about|work|project|capabilities]`: mobile only. It is `display: none` on desktop.
-- `[data-safe]` (alias `.scrim`): a void scrim at .82 opacity, 48px beyond the block, feathered.
+- `[data-safe]` (alias `.scrim`): a void scrim at .82 opacity, 48px beyond the block, with an eased (smootherstep) feather. The shader caps particles inside these rects at α .06 as well.
 - `.chip`.
 - `.btn` with `.btn-ember`, `.btn-line` or `.btn-outline-ember`: 48px tall.
 - `.link-line`: a 1px underline that scales in; 44px tall.

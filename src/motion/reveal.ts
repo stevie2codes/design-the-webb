@@ -9,7 +9,7 @@
  *   most 24px, §7.3), same two modes, stagger .05 by default.
  *
  * Every reveal completes during the transit-in, so the whole stuck range is
- * readable (hold rule). Create them inside `useGSAP` / a gsap.context (e.g.
+ * readable (hold rule). Create them inside a gsap.context (e.g.
  * a chapter's `reveal` callback, see useChapter) so they revert with it;
  * `revert()` also works standalone. Under reduced motion both are no-ops that
  * return null: the text is simply visible (§8.2). SplitText's `aria: 'auto'`

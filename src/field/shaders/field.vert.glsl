@@ -56,11 +56,14 @@
 // under the 24 px cursor ring.
 #define LOUPE_CORE 0.35
 
-// Text-safe mask (§2.3; tuned, CONTRACTS.md): ×.22 with a smootherstep
-// feather, then an ABSOLUTE ceiling — after FIELD_GAIN the relative ×.22
-// alone still let one crisp grain reach ~.4 α behind text.
-#define SAFE_FEATHER 56.0
-#define SAFE_ALPHA_MUL 0.5
+// Text-safe mask (§2.3; tuned, CONTRACTS.md): ×.22 over the §2.3 24px
+// feather, eased (smootherstep, no Mach band at either end of the ramp),
+// then an ABSOLUTE ceiling — after FIELD_GAIN the relative ×.22 alone still
+// let one crisp grain reach ~.4 α behind text. The feather stays 24px: the
+// hero eyebrow sits 20–50px above the name's cap line, and a wider ramp
+// dims the particle name's top.
+#define SAFE_FEATHER 24.0
+#define SAFE_ALPHA_MUL 0.22
 #define SAFE_ALPHA_MAX 0.06
 #define RIPPLE_PX 240.0
 #define RIPPLE_S 0.6
