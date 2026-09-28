@@ -289,14 +289,15 @@
        overflowing next to a classic scrollbar. */
     overflow-x: clip;
     /* Focus scrolling (Tab / Shift+Tab) and fragment jumps stop below the
-       fixed nav band (64px nav + its 96px scrim; 56 + 80 on mobile), so a
-       focus ring is never tucked under it (WCAG 2.4.12). Scripted jumps use
-       explicit window.scrollTo targets and are unaffected. */
-    scroll-padding-top: 6rem;
+       fixed nav band (64px nav + its 96px scrim; 56 + 80 on mobile) plus the
+       5px focus ring (offset 3 + width 2), so a ring is never tucked under
+       it (WCAG 2.4.12). Scripted jumps use explicit window.scrollTo targets
+       and are unaffected. */
+    scroll-padding-top: calc(6rem + 8px);
   }
   @media (max-width: 1023.98px) and (orientation: portrait), (max-width: 767.98px) and (min-height: 500px) {
     html {
-      scroll-padding-top: 5rem;
+      scroll-padding-top: calc(5rem + 8px);
     }
   }
 

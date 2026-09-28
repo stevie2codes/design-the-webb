@@ -20,10 +20,15 @@ function stageHeightPx(): number {
  * below the fold. The chapter marks what must fit with [data-fit]; when
  * (its bottom − the stage top + the stage's bottom padding) exceeds 100svh,
  * the section gets [data-overflow] and CSS drops it to plain flow (the
- * reduced-motion layout), which grows to fit. The measure does not depend
- * on the mode, so it cannot oscillate. Re-measured on resize and font load.
- * The scroll phase reads [data-overflow] (via the stage's computed
- * position) like any other flow chapter.
+ * reduced-motion layout), which grows to fit. Re-measured on resize and
+ * font load. The scroll phase reads [data-overflow] (via the stage's
+ * computed position) like any other flow chapter.
+ *
+ * Stage-only sizes (the `staged:` variant: tighter, height-capped type and
+ * rhythm) apply only without [data-overflow], so the guard always measures
+ * the stuck layout: it lifts [data-overflow] for the measure and sets it
+ * again in the same frame (no paint in between). The result does not
+ * depend on the current mode, so it cannot oscillate or stick in flow.
  */
 function useStageFit(sectionRef: RefObject<HTMLElement | null>, stageRef: RefObject<HTMLDivElement | null>) {
   useLayoutEffect(() => {
@@ -38,6 +43,9 @@ function useStageFit(sectionRef: RefObject<HTMLElement | null>, stageRef: RefObj
     const measure = () => {
       raf = 0;
       if (!alive) return;
+      const wasOverflow = section.hasAttribute('data-overflow');
+      const scrollY = window.scrollY;
+      if (wasOverflow) section.removeAttribute('data-overflow');
       const top = stage.getBoundingClientRect().top;
       let need = 0;
       for (const el of targets) {
@@ -45,7 +53,11 @@ function useStageFit(sectionRef: RefObject<HTMLElement | null>, stageRef: RefObj
         if (r.height > 0) need = Math.max(need, r.bottom - top);
       }
       need += parseFloat(getComputedStyle(stage).paddingBottom) || 0;
-      section.toggleAttribute('data-overflow', need > stageHeightPx() + 1);
+      const overflow = need > stageHeightPx() + 1;
+      section.toggleAttribute('data-overflow', overflow);
+      // Lifting the flag grows the section for the measure; if scroll
+      // anchoring moved the page meanwhile, put it back.
+      if (wasOverflow && overflow && window.scrollY !== scrollY) window.scrollTo(0, scrollY);
     };
     const schedule = () => {
       if (!raf) raf = requestAnimationFrame(measure);

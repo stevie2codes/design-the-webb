@@ -1049,13 +1049,13 @@ Conventions:
 
 ### C4 What I do — sticky, L = 100vh — `#capabilities`
 
-**Layout (desktop).** Left column from the gutter to 46vw; S8 on the right.
+**Layout (desktop).** Left column from the gutter to 49vw; S8 on the right (its drawn stack starts at about 53vw). The column is wider than a 44ch caption column on purpose: every description must stay on **two lines** (the `.t-body` 62ch measure). At 44ch each description takes three lines, and the heading, statement and four rows then need about 900–930px of height, so the stuck 100svh stage would overflow and fall back to flow on every laptop height below about 1000px (1366×768, 1440×900, 1536×864).
 
 **Copy.**
 
 - h2 (`.t-label` ember): **03 — What I do**
 - Statement (`.t-display-l`): **Thoughtful craft across the** *full product surface*
-- Rows, separated by hairlines. Each has an index (`.t-label`, ember when active and ink-2 otherwise), an h3 (`.t-display-m`), and a description (`.t-body` ink-2, max 44ch) that is **always visible**:
+- Rows, separated by hairlines. Each has an index (`.t-label`, ember when active and ink-2 otherwise), an h3 (`.t-display-m`), and a description (`.t-body` ink-2, two lines on desktop; see Layout) that is **always visible**:
   1. **Product Design** — From discovery to delivery. I design end-to-end product experiences rooted in user research, business strategy, and systems thinking.
   2. **Data Visualization** — Turning dense datasets into legible, actionable interfaces. Charts, dashboards, and exploratory tools that respect the complexity of real data.
   3. **Design Systems** — Building scalable component libraries and design tokens that keep teams aligned and products consistent across dozens of surfaces.
@@ -1333,7 +1333,9 @@ The DOM `<h1>` stays in the accessibility tree throughout. Only `mask-image` hid
 
 ```
 src/
-  main.tsx                      fonts + lenis.css + index.css imports; createRoot(<StrictMode><App/>)
+  main.tsx                      fonts + lenis.css + index.css imports; hydrateRoot(<StrictMode><App/>) over the
+                                prerendered HTML (createRoot when #root holds another route's markup, or none)
+  entry-server.tsx, routes.ts   build-time prerender of "/", each "/work/:slug" and the 404 (§9.11)
   App.tsx                       BrowserRouter → AppShell: SkipLink, FieldCanvas, Atmosphere, Nav, Rail, Hud,
                                 CursorRing, <main><Suspense><Routes/></Suspense></main>, Footer, JumpCutOverlay
   index.css                     @theme tokens (§2.1), @layer base (html/body, focus, selection, lenis, rm),
@@ -1591,6 +1593,8 @@ uOff.xy = pxToSu(anchorCenterVp);                             // Y = 1 - 2·py/H
 - Keep the existing meta description and OG tags. `og-image.png` is referenced but **missing from `/public`**; export a 1200×630 still of the S1 lock.
 
 **CSS gating:** sticky layout only applies under `html.js:not(.rm)`. `no-js` and `rm` get plain flow.
+
+**Prerender:** after `vite build`, `scripts/prerender-plugin.mjs` renders every route with `react-dom/static` (`prerenderToNodeStream`, which waits for the lazy routes) into `index.html`, `work/<slug>.html` and `404.html`, with `#root[data-ssr]` set to the route key and the route's `<title>`. There is no SPA catch-all on the host, so unknown paths get `404.html`.
 
 **`vite.config.ts`:** add a tiny `preloadFonts()` plugin (`apply: 'build'`, `transformIndexHtml` `order: 'post'`). It finds the emitted asset matching `archivo-latin-wdth-normal` in `ctx.bundle` and injects `<link rel="preload" as="font" type="font/woff2" crossorigin href="/assets/…">`.
 

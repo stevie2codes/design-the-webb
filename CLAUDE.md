@@ -6,7 +6,7 @@ Personal portfolio for Stephen Webb, Senior Product Designer. The site is dark a
 
 ## Tech stack
 
-- **Framework**: React 19, TypeScript and Vite 7. Routing uses `react-router-dom` 7, and every route is lazy and code-split.
+- **Framework**: React 19, TypeScript and Vite 7. Routing uses `react-router-dom` 7. Home is eager (the hero `<h1>` is the LCP); `/work/:slug` and the 404 are lazy and code-split. **Every route is prerendered at build time** (`scripts/prerender-plugin.mjs` renders `src/entry-server.tsx` for each entry in `src/routes.ts`), so the no-JS path has all copy and links, and `main.tsx` hydrates. Keep `window`/`document` access out of render (effects and handlers only).
 - **Styling**: Tailwind CSS v4 through `@tailwindcss/vite`. There is no `tailwind.config.js`.
 - **Motion**: GSAP 3.14 (ScrollTrigger, SplitText, CustomEase) with `@gsap/react` `useGSAP`. Smooth scroll is Lenis 1.3, on the desktop full-motion path only.
 - **Field**: vanilla `three` 0.186 with one `THREE.Points` object and a GLSL3 `ShaderMaterial`. It is **dynamically imported after first paint** and never enters the initial bundle. The Canvas2D fallback never imports three.
@@ -34,8 +34,12 @@ Personal portfolio for Stephen Webb, Senior Product Designer. The site is dark a
 ```
 index.html                pre-paint script: no-js→js, html.rm, html[data-layout]; scrollRestoration manual
 src/
-  main.tsx                fontsource + lenis.css + index.css; applyLayoutVars(); init motion/layout sync
-  App.tsx                 shell: SkipLink, #field-root, Atmosphere, Nav, Rail, Hud, <main id="main">, Footer
+  main.tsx                fontsource + lenis.css + index.css; applyLayoutVars(); init motion/layout sync;
+                          hydrateRoot when #root[data-ssr] matches routeKey(pathname), else createRoot
+  App.tsx                 AppShell (SkipLink, #field-root, Atmosphere, Nav, Rail, Hud, <main id="main">, Footer)
+                          + App = BrowserRouter › AppShell
+  entry-server.tsx        build-time prerender: StaticRouter › AppShell via react-dom/static
+  routes.ts               routeKey(), PRERENDER_ROUTES (url, output file, title)
   index.css               @theme tokens, custom variants, @layer base / components (see below)
   content/
     site.ts               EVERY home + shell string (Appendix A). Never hard-code copy in components.
@@ -58,7 +62,8 @@ src/
   components/             Chapter, ChapterHeading, LinkLabel, Chip, SkipLink, Atmosphere, Nav, MobileMenu,
                           Rail, Hud, Footer, CopyEmail, MotionToggle (+ CursorRing, JumpCutOverlay later)
   pages/                  HomePage (composes chapters), ProjectDetailPage, NotFoundPage
-scripts/                  gen-layout-css.mjs, make-grain.mjs
+scripts/                  gen-layout-css.mjs, make-grain.mjs, prerender-plugin.mjs (+ .d.mts; build prerender and
+                          the `vite preview` 404 fallback)
 ```
 
 ## The field architecture, in short

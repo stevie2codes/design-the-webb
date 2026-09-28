@@ -416,7 +416,7 @@ export function CareerStats({ className = '' }: { className?: string }) {
           key={stat.key}
           data-stat={stat.key}
           data-lights={stat.groups.map((g) => `g${g}`).join(' ')}
-          className={`group grid grid-cols-[3rem_minmax(0,1fr)] gap-x-3 border-t border-line py-4 last:border-b desktop:min-[1000px]:row-span-2 desktop:min-[1000px]:mr-3 desktop:min-[1000px]:grid-cols-1 desktop:min-[1000px]:grid-rows-subgrid desktop:min-[1000px]:border-0 desktop:min-[1000px]:py-0 desktop:min-[1000px]:last:mr-0`}
+          className={`group grid grid-cols-[3rem_minmax(0,1fr)] gap-x-3 border-t border-line py-4 last:border-b desktop:min-[1000px]:row-span-2 desktop:min-[1000px]:mr-3 desktop:min-[1000px]:grid-cols-1 desktop:min-[1000px]:grid-rows-subgrid desktop:min-[1000px]:border-0 desktop:min-[1000px]:py-0 desktop:min-[1000px]:last:mr-0 desktop:min-[1000px]:last:border-b-0`}
         >
           <span
             className={`t-label row-span-2 tabular-nums desktop:min-[1000px]:hidden ${stat.key === 'ai' ? 'text-ember' : 'text-ink'}`}

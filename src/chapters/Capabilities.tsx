@@ -8,19 +8,22 @@ import { headingId } from '../scroll/chapters';
 
 
 /**
- * Desktop measures. While stuck the stage is exactly 100svh and every row
- * must stay readable at once (hold rule), so on laptop-height viewports the
- * vw-driven roles are also capped by height, and the vertical rhythm is in
- * svh. At 1920×1080 only the statement cap is active (its role size would
- * need three lines in the column). Below ≈ 730px of height it still cannot
- * fit, and the fit guard in <Chapter> drops the chapter to flow.
+ * Stuck-stage measures (the `staged:` variant: desktop, full motion, and only
+ * while the stage really is sticky). While stuck the stage is exactly 100svh
+ * and every row must stay readable at once (hold rule), so the vw-driven
+ * roles are also capped by height (never below their role minimums), and
+ * the vertical rhythm is in svh. When it still cannot fit, the fit guard in
+ * <Chapter> drops the chapter to flow, and there — as under reduced motion,
+ * without JS and on short landscape phones — the plain roles and rhythm
+ * apply (.t-display-l / .t-display-m, py-6).
  */
-const STATEMENT_FS = 'desktop:text-[max(2rem,min(clamp(2.25rem,1.3rem+3.4vw,5rem),5.4svh))]';
-const TITLE_FS = 'desktop:text-[min(clamp(1.625rem,1.1rem+1.8vw,2.75rem),3.9svh)]';
+const STATEMENT_FS = 'staged:text-[max(2rem,min(clamp(2.25rem,1.3rem+3.4vw,5rem),5.4svh))]';
+const TITLE_FS = 'staged:text-[max(1.625rem,min(clamp(1.625rem,1.1rem+1.8vw,2.75rem),3.9svh))]';
 /**
- * The left column: gutter → 49vw (§5 C4 says 46vw; the extra 3vw keeps every
- * description on two lines down to 1280px wide, and still clears the stack,
- * whose drawn shape starts at ≈ 53vw).
+ * The left column: gutter → 49vw (§5 C4). The width keeps every description
+ * on two lines down to 1280px wide (at a 44ch caption measure each takes
+ * three, and the stuck stage no longer fits below ≈ 1000px of height), and
+ * still clears the stack, whose drawn shape starts at ≈ 53vw.
  */
 const COLUMN = 'desktop:w-[calc(49vw-var(--gutter))]';
 
@@ -69,7 +72,7 @@ export default function Capabilities() {
     <Chapter
       id="capabilities"
       labelledBy={titleId}
-      stageClassName="pb-24 desktop:flex desktop:flex-col desktop:justify-center-safe desktop:pt-[max(104px,11svh)] desktop:pb-[max(24px,4svh)]"
+      stageClassName="pb-24 desktop:flex desktop:flex-col desktop:justify-center-safe desktop:pt-[max(104px,11svh)] desktop:pb-[max(48px,4svh)]"
     >
       {/* Mobile: the stack slot opens the chapter (§4.2). Hidden on desktop. */}
       <div className="field-slot" data-slot="capabilities" aria-hidden="true">
@@ -83,17 +86,18 @@ export default function Capabilities() {
 
       {/* data-fit: the whole column must fit the stuck stage, or the chapter
           falls back to flow (the fit guard in <Chapter>). The top padding
-          keeps the heading clear of the nav band (64px + its 96px scrim). */}
+          keeps the heading clear of the nav band (64px + its 96px scrim),
+          the bottom padding the HUD's corner band (≥ 48px). */}
       <div data-fit className="px-gutter mobile:pt-2">
         {/* One scrim for the whole column: stacked [data-safe] blocks closer
             than 48px would darken each other's text. */}
         <div data-safe className={COLUMN}>
           <ChapterHeading heading={capabilities.heading} id={titleId} />
-          <p className={`t-display-l mt-5 text-balance text-ink desktop:mt-[clamp(12px,2svh,24px)] ${STATEMENT_FS}`}>
+          <p className={`t-display-l mt-5 text-balance text-ink staged:mt-[clamp(12px,2svh,24px)] ${STATEMENT_FS}`}>
             {capabilities.statement.lead} <span className="t-accent">{capabilities.statement.accent}</span>
           </p>
 
-          <ol ref={listRef} className="mt-12 desktop:mt-[clamp(16px,3svh,48px)]">
+          <ol ref={listRef} className="mt-12 staged:mt-[clamp(16px,3svh,48px)]">
             {capabilities.items.map((item, i) => (
               <CapabilityRow key={item.title} item={item} index={i} active={i === active} onActivate={setActive} />
             ))}
@@ -125,7 +129,7 @@ function CapabilityRow({ item, index, active, onActivate }: CapabilityRowProps) 
         if (e.pointerType !== 'touch') onActivate(index);
       }}
       onClick={() => onActivate(index)}
-      className="group relative border-t border-line py-6 last:border-b desktop:py-[clamp(6px,1.1svh,20px)]"
+      className="group relative border-t border-line py-6 last:border-b staged:py-[clamp(6px,1.1svh,20px)]"
     >
       <span
         aria-hidden="true"
@@ -144,7 +148,7 @@ function CapabilityRow({ item, index, active, onActivate }: CapabilityRowProps) 
           {String(index + 1).padStart(2, '0')}
         </span>
       </div>
-      <p className="t-body mt-3 text-ink-2 desktop:mt-[clamp(4px,0.9svh,10px)]">{item.description}</p>
+      <p className="t-body mt-3 text-ink-2 staged:mt-[clamp(4px,0.9svh,10px)]">{item.description}</p>
     </li>
   );
 }

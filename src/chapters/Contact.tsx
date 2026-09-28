@@ -12,7 +12,9 @@ import { headingId } from '../scroll/chapters';
  *   the label needs (≈ 7rem at 16px).
  * - --email-y: where the email row starts: 74svh desktop, 68svh mobile.
  *   Short screens (height < 600, or < 700 on phones) drop it and just
- *   clear the beacon, so the sticky stage still holds everything.
+ *   clear the beacon, so the sticky stage still holds everything; short
+ *   phones also tighten the body gap and the bottom padding (360×640 stays
+ *   sticky).
  */
 const STAGE =
   'group/contact [--disc-d:max(calc(var(--anchor-beacon-r)*1.24),6.75rem)] [--email-y:68svh] desktop:[--email-y:74svh] mobile:[@media(max-height:699.98px)]:[--email-y:0px] short:[--email-y:0px]';
@@ -57,7 +59,7 @@ export default function Contact() {
       {/* data-fit: everything must fit the stuck stage, or the chapter falls
           back to flow (the fit guard in <Chapter>). The header clears the
           nav band (64px + its 96px scrim; 56 + 80 on mobile). */}
-      <div data-fit className="grid grid-cols-1 justify-items-center pb-10 desktop:pb-[max(16px,2.5svh)]">
+      <div data-fit className="grid grid-cols-1 justify-items-center pb-10 desktop:pb-[max(16px,2.5svh)] mobile:[@media(max-height:699.98px)]:pb-6">
         {/* Row 1: the header, over a floor that keeps row 2 below the disc. */}
         <div
           aria-hidden="true"
@@ -81,7 +83,7 @@ export default function Contact() {
         <div className="col-start-1 row-start-2 w-full px-gutter">
           <div data-safe className="mx-auto w-fit max-w-full">
             <CopyEmail />
-            <div className="mx-auto mt-5 max-w-[44ch] desktop:mt-4 desktop:text-center short:text-left">
+            <div className="mx-auto mt-5 max-w-[44ch] desktop:mt-4 desktop:text-center short:text-left mobile:[@media(max-height:699.98px)]:mt-3">
               <Portrait variant="inline" />
               {/* Balanced when centred (no "talk shop." widow); pretty beside the inline portrait. */}
               <p className="t-body text-pretty text-ink-2 desktop:text-balance short:text-pretty">{contact.body}</p>
