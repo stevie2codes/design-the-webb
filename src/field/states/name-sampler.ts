@@ -241,6 +241,8 @@ export interface NameSample {
   /** Debug: glyph boxes, CSS px relative to the anchor centre (x0, y0, x1, y1). */
   readonly boxes: Float32Array;
   readonly ms: number;
+  /** Time per phase (ms): measure, draw, readback, classify, sample, sort, pack. */
+  readonly phases: Readonly<Record<string, number>>;
 }
 
 export interface NameSampleInput {
@@ -255,8 +257,16 @@ let raster: HTMLCanvasElement | null = null;
 
 export function sampleName(input: NameSampleInput): NameSample {
   const t0 = performance.now();
+  const phases: Record<string, number> = {};
+  let tp = t0;
+  const mark = (name: string) => {
+    const t = performance.now();
+    phases[name] = Math.round((t - tp) * 10) / 10;
+    tp = t;
+  };
   const { layout, view } = input;
   const dom = input.elements.h1 ? measureDom(input.elements.h1, input.elements.anchor) : null;
+  mark('measure');
   const f = dom ?? layoutFrame(view, input.mode);
   const rand = mulberry32(stateSeed(StateId.NAME));
   const suK = view.H > 0 ? 2 / view.H : 0;
@@ -264,17 +274,12 @@ export function sampleName(input: NameSampleInput): NameSample {
   const toSuY = (y: number) => -(y - f.acy) * suK;
   const normX = (x: number) => Math.min(1, Math.max(0, (x - f.left) / Math.max(1, f.width)));
   const cap = NAME_METRICS.capEm * f.size;
+  // Group = line index: split halfway between consecutive line centres.
+  const lineSplits = f.lines.slice(1).map((l, i) => (f.lines[i].baseline + l.baseline) / 2 - cap / 2);
   const lineOf = (y: number): number => {
-    let best = 0;
-    let bd = Infinity;
-    f.lines.forEach((l, i) => {
-      const d = Math.abs(y - (l.baseline - cap / 2));
-      if (d < bd) {
-        bd = d;
-        best = i;
-      }
-    });
-    return best;
+    let i = 0;
+    while (i < lineSplits.length && y > lineSplits[i]) i++;
+    return i;
   };
 
   // 3. Raster.
@@ -293,7 +298,8 @@ export function sampleName(input: NameSampleInput): NameSample {
   const shape = new TargetList(layout.M);
   const spark = new TargetList(layout.S);
   const nGlyph = Math.round(layout.M * GLYPH_SHARE);
-  const dots: number[] = [];
+  const dots = new Float32Array(nGlyph * 2);
+  let nDots = 0;
 
   if (ctx) {
     ctx.clearRect(0, 0, cw, ch);
@@ -314,58 +320,68 @@ export function sampleName(input: NameSampleInput): NameSample {
       ctx.fillText(r.text, x, b);
     }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+    mark('draw');
 
-    // 4. alpha > 128; edges (a 4-neighbour ≤ 128) weigh 2.
+    // 4. alpha > 128 → on; edge = an on pixel with a 4-neighbour off
+    //    (weight 2), interior weight 1. The .25em pad keeps ink off the
+    //    border, so the loops skip the outer ring without bounds checks.
     const img = ctx.getImageData(0, 0, cw, ch).data;
-    const cls = new Uint8Array(cw * ch); // 0 out, 1 interior, 2 edge
+    mark('readback');
+    const n = cw * ch;
+    const on = new Uint8Array(n);
+    for (let i = 0, j = 3; i < n; i++, j += 4) on[i] = img[j] > 128 ? 1 : 0;
+    const cls = new Uint8Array(n); // 0 off, 1 interior, 2 edge
     let total = 0;
-    const on = (x: number, y: number) => x >= 0 && y >= 0 && x < cw && y < ch && img[(y * cw + x) * 4 + 3] > 128;
-    for (let y = 0; y < ch; y++) {
-      for (let x = 0; x < cw; x++) {
-        if (img[(y * cw + x) * 4 + 3] <= 128) continue;
-        const edge = !on(x - 1, y) || !on(x + 1, y) || !on(x, y - 1) || !on(x, y + 1);
-        cls[y * cw + x] = edge ? 2 : 1;
-        total += edge ? 2 : 1;
+    for (let y = 1; y < ch - 1; y++) {
+      for (let i = y * cw + 1, end = y * cw + cw - 1; i < end; i++) {
+        if (!on[i]) continue;
+        const c = on[i - 1] & on[i + 1] & on[i - cw] & on[i + cw] ? 1 : 2;
+        cls[i] = c;
+        total += c;
       }
     }
 
+    mark('classify');
     // Weighted stratified sampling: one sample at a random point of each
-    // stratum [k, k + 1)·step of the cumulative weight (scan order). Evenly
+    // stratum [s, s + 1)·step of the cumulative weight (scan order). Evenly
     // spread like systematic sampling, without its row-aligned moiré.
     if (total > 0) {
       const step = total / nGlyph;
       let stratum = 0;
       let next = rand() * step;
       let acc = 0;
-      for (let y = 0; y < ch && !shape.full; y++) {
-        for (let x = 0; x < cw; x++) {
-          const c = cls[y * cw + x];
-          if (!c) continue;
-          acc += c;
-          while (next < acc && shape.count < nGlyph) {
-            next = (++stratum + rand()) * step;
-            const cssX = ox + (x + 0.5 + (rand() * 2 - 1) * 0.4) / k;
-            const cssY = oy + (y + 0.5 + (rand() * 2 - 1) * 0.4) / k;
-            const nx = normX(cssX);
-            const edge = c === 2;
-            shape.push(
-              toSuX(cssX),
-              toSuY(cssY),
-              (rand() * 2 - 1) * 0.015,
-              0.15 + 0.6 * nx + 0.25 * rand(),
-              RAMP.signal,
-              edge ? 1 : 0.6,
-              nx,
-              edge ? Role.EDGE : Role.FILL,
-              lineOf(cssY),
-            );
-            dots.push(cssX - f.acx, cssY - f.acy);
-          }
+      for (let i = 0; i < n && shape.count < nGlyph; i++) {
+        const c = cls[i];
+        if (!c) continue;
+        acc += c;
+        if (next >= acc) continue;
+        const x = i % cw;
+        const y = (i - x) / cw;
+        while (next < acc && shape.count < nGlyph) {
+          next = (++stratum + rand()) * step;
+          const cssX = ox + (x + 0.5 + (rand() * 2 - 1) * 0.4) / k;
+          const cssY = oy + (y + 0.5 + (rand() * 2 - 1) * 0.4) / k;
+          const nx = normX(cssX);
+          const edge = c === 2;
+          shape.push(
+            toSuX(cssX),
+            toSuY(cssY),
+            (rand() * 2 - 1) * 0.015,
+            0.15 + 0.6 * nx + 0.25 * rand(),
+            RAMP.signal,
+            edge ? 1 : 0.6,
+            nx,
+            edge ? Role.EDGE : Role.FILL,
+            lineOf(cssY),
+          );
+          dots[nDots++] = cssX - f.acx;
+          dots[nDots++] = cssY - f.acy;
         }
       }
     }
   }
 
+  mark('sample');
   // 18% atmospheric band: name centre ± 1.1 cap-heights, 115% of the width.
   const firstBase = f.lines[0]?.baseline ?? f.top + f.height;
   const lastBase = f.lines[f.lines.length - 1]?.baseline ?? firstBase;
@@ -402,7 +418,9 @@ export function sampleName(input: NameSampleInput): NameSample {
 
   sortTargets(shape, COLUMNS_64, rand);
   sortTargets(spark, COLUMNS_64, rand);
+  mark('sort');
   const packed = packState(layout, shape, spark, input.dust);
+  mark('pack');
 
   const boxes = new Float32Array(f.runs.length * 4);
   f.runs.forEach((r, i) => {
@@ -418,8 +436,9 @@ export function sampleName(input: NameSampleInput): NameSample {
     source: dom ? 'dom' : 'layout',
     fontReady: isNameFontReady(),
     bounds: { x0: toSuX(f.left), x1: toSuX(f.left + f.width), y0: toSuY(f.top + f.height), y1: toSuY(f.top) },
-    dots: new Float32Array(dots),
+    dots: dots.subarray(0, nDots),
     boxes,
     ms: performance.now() - t0,
+    phases,
   };
 }
