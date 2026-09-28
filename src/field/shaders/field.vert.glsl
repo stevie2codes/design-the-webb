@@ -60,6 +60,7 @@
 // feather, then an ABSOLUTE ceiling — after FIELD_GAIN the relative ×.22
 // alone still let one crisp grain reach ~.4 α behind text.
 #define SAFE_FEATHER 56.0
+#define SAFE_ALPHA_MUL 0.5
 #define SAFE_ALPHA_MAX 0.06
 #define RIPPLE_PX 240.0
 #define RIPPLE_S 0.6
@@ -350,7 +351,7 @@ void main() {
     vec2 d = max(r.xy - px, px - r.zw);
     float x = clamp(1.0 - max(d.x, d.y) / SAFE_FEATHER, 0.0, 1.0);
     float inside = x * x * x * (x * (x * 6.0 - 15.0) + 10.0);
-    alpha *= mix(1.0, 0.22, inside);
+    alpha *= mix(1.0, SAFE_ALPHA_MUL, inside);
     rampPos = mix(rampPos, min(rampPos, 0.5), inside);
     insideMax = max(insideMax, inside);
   }
