@@ -13,6 +13,11 @@ export interface GenerateRequest {
   readonly type: 'generate';
   /** Job id: replies carry it; the engine drops replies of superseded jobs. */
   readonly job: number;
+  /**
+   * true (default): drop every queued job first (boot, resize regeneration).
+   * false: queue behind them (lazy states such as S10).
+   */
+  readonly supersede?: boolean;
   /** In order of priority (§9.9: S0 first, then S2–S9). */
   readonly ids: readonly StateId[];
   readonly tier: TierDims;

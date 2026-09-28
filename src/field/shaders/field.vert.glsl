@@ -51,12 +51,27 @@
 #define M_PUSH 1
 #define M_ATTRACT 2
 #define MOUSE_R 0.24
+// Loupe (tuned, CONTRACTS.md): the inner LOUPE_CORE of MOUSE_R is fully in
+// focus with a soft edge — a (1 − d/r)² pull left only ~5–11 px sharp,
+// under the 24 px cursor ring.
+#define LOUPE_CORE 0.35
 
-#define SAFE_FEATHER 24.0
+// Text-safe mask (§2.3; tuned, CONTRACTS.md): ×.22 with a smootherstep
+// feather, then an ABSOLUTE ceiling — after FIELD_GAIN the relative ×.22
+// alone still let one crisp grain reach ~.4 α behind text.
+#define SAFE_FEATHER 56.0
+#define SAFE_ALPHA_MAX 0.06
 #define RIPPLE_PX 240.0
 #define RIPPLE_S 0.6
 #define GLOW_SIZE 5.0
 #define GLOW_ALPHA 0.07
+// Tuning (docs/redesign/CONTRACTS.md "Tuning notes"). Bokeh-eligible points
+// get their own cap between BOKEH_SPREAD.x and .y × uBokehCap (mean ≈ 1), so
+// the defocused volume shows discs of many sizes instead of one; light
+// falls off with the drawn growth ^ BOKEH_FALLOFF (§3.6 says 1.6: too dark
+// once discs are capped).
+#define BOKEH_SPREAD vec2(0.5, 1.5)
+#define BOKEH_FALLOFF 1.3
 
 in vec4 aSeed; // x size, y twinkle rate, z scroll inertia, w bokeh eligibility (< .35)
 
@@ -114,6 +129,7 @@ uniform float uPxSu;    // su per CSS px (2 / canvas height)
 out vec3 vColor;
 out float vAlpha;
 out float vBokeh;
+out float vSoft; // 1 = soft glow profile (the printed name's halo)
 
 vec4 gSeed; // aSeed, visible to live()
 
@@ -243,25 +259,28 @@ void main() {
   // Pointer (§3.7), measured on the z = 0 projection so effects stay under
   // the cursor at any depth.
   float bright = mix(la.bright, lb.bright, e);
+  float loupe = 0.0; // 1 = racked into focus by the loupe
   if (uMouseAmt > 0.001) {
     float persp0 = CAM_Z / (CAM_Z - p.z);
     vec2 sp = p.xy * persp0;
     vec2 d = sp - uMouse.xy;
     float dist = length(d);
     if (dist < MOUSE_R) {
-      float fall = 1.0 - dist / MOUSE_R;
-      fall *= fall * uMouseAmt;
-      vec2 dir = dist > 1e-5 ? d / dist : vec2(0.0);
       if (uMouseMode == M_LOUPE) {
-        // Pull toward the focal plane, keeping the screen position: sharp and bright.
-        float nz = mix(p.z, 0.0, 0.85 * fall);
+        // A lens of sharpness: pull onto the focal plane, keeping the screen
+        // position, and (below) drive the circle of confusion to 1.
+        loupe = uMouseAmt * (1.0 - smoothstep(LOUPE_CORE * MOUSE_R, MOUSE_R, dist));
+        float nz = mix(p.z, uFocusZ, 0.95 * loupe);
         p = vec3(sp * (CAM_Z - nz) / CAM_Z, nz);
-      } else if (uMouseMode == M_PUSH) {
-        p.xy += dir * (0.05 * fall / persp0);
+        bright *= 1.0 + 0.3 * loupe;
       } else {
-        p.xy -= dir * (min(0.08 * fall, dist) / persp0);
+        float fall = 1.0 - dist / MOUSE_R;
+        fall *= fall * uMouseAmt;
+        vec2 dir = dist > 1e-5 ? d / dist : vec2(0.0);
+        if (uMouseMode == M_PUSH) p.xy += dir * (0.05 * fall / persp0);
+        else p.xy -= dir * (min(0.08 * fall, dist) / persp0);
+        bright *= 1.0 + 0.3 * fall;
       }
-      bright *= 1.0 + 0.3 * fall;
     }
   }
   if (uRipple.z >= 0.0 && uMotion > 0.0) {
@@ -293,19 +312,21 @@ void main() {
 #else
   float gBlur = mix(stackA * 1.2 * (1.0 - wA), stackB * 1.2 * (1.0 - wB), e);
   float dof = 1.0 + uAperture * min(abs(p.z - uFocusZ), 3.0) * 4.5 + gBlur;
+  dof = mix(dof, 1.0, loupe);
 #endif
   float baseSize = mix(uSizeMin, uSizeMax, aSeed.x * aSeed.x) * persp * mix(la.size, lb.size, e);
 #ifdef GLOW
   gl_PointSize = baseSize * GLOW_SIZE * uDpr;
   float alpha = GLOW_ALPHA * mix(mA.g * la.alpha, mB.g * lb.alpha, e);
 #else
-  float drawn = min(baseSize * dof, aSeed.w < 0.35 ? uBokehCap : 6.0);
+  float cap = aSeed.w < 0.35 ? uBokehCap * mix(BOKEH_SPREAD.x, BOKEH_SPREAD.y, aSeed.w / 0.35) : 6.0;
+  float drawn = min(baseSize * dof, max(cap, baseSize));
   gl_PointSize = drawn * uDpr;
   // §3.6 divides α by dof^1.6; a capped point stops growing but would keep
   // dimming, so the falloff uses the growth actually drawn (light is
   // conserved once the bokeh cap binds).
   float grow = max(1.0, drawn / max(baseSize, 1e-3));
-  float alpha = mix(mA.g * la.alpha, mB.g * lb.alpha, e) * mix(uDensityA, uDensityB, e) / pow(grow, 1.6);
+  float alpha = mix(mA.g * la.alpha, mB.g * lb.alpha, e) * mix(uDensityA, uDensityB, e) / pow(grow, BOKEH_FALLOFF);
 #endif
   alpha *= FIELD_GAIN * uOpacity * uExposure * mix(uOffA.w, uOffB.w, e);
   // Twinkle in settled states.
@@ -317,21 +338,29 @@ void main() {
   rampPos = mix(rampPos, 0.75, 0.7 * smoothstep(0.7, 1.0, w) * uFocusOn * mix(stackA, stackB, e));
 
   // Text-safe mask (§2.3, §3.6) on the final screen position: particles
-  // inside a [data-safe] block (24px feather) get α ×.22 and no ember.
+  // inside a [data-safe] block (smootherstep feather) get α ×.22, no ember,
+  // no extra brightness (beam, loupe) and, whatever the gain, at most
+  // SAFE_ALPHA_MAX — so the field behind text stays at or below #262A34.
   vec2 ndc = gl_Position.xy / gl_Position.w;
   vec2 px = vec2((ndc.x * 0.5 + 0.5) * uViewport.x, (0.5 - ndc.y * 0.5) * uViewport.y);
+  float insideMax = 0.0;
   for (int k = 0; k < 6; k++) {
     if (k >= uSafeCount) break;
     vec4 r = uSafe[k];
     vec2 d = max(r.xy - px, px - r.zw);
-    float inside = 1.0 - smoothstep(0.0, SAFE_FEATHER, max(d.x, d.y));
+    float x = clamp(1.0 - max(d.x, d.y) / SAFE_FEATHER, 0.0, 1.0);
+    float inside = x * x * x * (x * (x * 6.0 - 15.0) + 10.0);
     alpha *= mix(1.0, 0.22, inside);
     rampPos = mix(rampPos, min(rampPos, 0.5), inside);
+    insideMax = max(insideMax, inside);
   }
+  alpha = mix(alpha, min(alpha, SAFE_ALPHA_MAX), insideMax);
+  bright = mix(bright, min(bright, 1.0), insideMax);
 
   vColor = ramp(rampPos) * bright;
   vAlpha = alpha;
   vBokeh = smoothstep(2.0, 3.5, dof);
+  vSoft = mix(la.soft, lb.soft, e);
   // Invisible points never reach the rasteriser.
   if (alpha < 0.002) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
 }

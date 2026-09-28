@@ -38,8 +38,8 @@ index.html                pre-paint script: no-js→js, html.rm, html[data-layou
 src/
   main.tsx                fontsource + lenis.css + index.css; applyLayoutVars(); init motion/layout sync;
                           hydrateRoot when #root[data-ssr] matches routeKey(pathname), else createRoot
-  App.tsx                 AppShell (SkipLink, #field-root, Atmosphere, Nav, Rail, Hud, <main id="main">, Footer)
-                          + App = BrowserRouter › AppShell
+  App.tsx                 AppShell (ScrollInfra, SkipLink, FieldCanvas, Atmosphere, Nav, Rail, Hud, ScrollToHash,
+                          <main id="main">, Footer, JumpCutOverlay, CursorRing) + App = BrowserRouter › AppShell
   entry-server.tsx        build-time prerender: StaticRouter › AppShell via react-dom/static
   routes.ts               routeKey(), PRERENDER_ROUTES (url, output file, title)
   debugParams.ts          QA URL params (?debug=field, ?film=F, ?tier=, ?intro=0); window.__lenis / __field
@@ -51,21 +51,34 @@ src/
     gsap.ts               the only place plugins are registered; exports gsap, ScrollTrigger, SplitText, useGSAP, EASE, DUR
     motionPref.ts         reduced motion (OS + footer toggle, localStorage 'dtw:motion'), html.rm, useMotionPref()
     useLayoutMode.ts      'desktop' | 'mobile' (MQ.mobile), html[data-layout], useLayoutMode()
-    lenis.ts, reveal.ts   (scroll phase)
+    lenis.ts              Lenis singleton + ticker wiring, useSmoothScroll(), glide / jumpCut / rewind /
+                          scrollInstant, subscribeScroll, onSample (≤ 10 Hz) / sampleNow, requestRefresh
+    reveal.ts             lineMask(el, opts) and fadeUp(els, opts): scrubbed or timed; null under reduced motion
   scroll/
     chapters.ts           document map: CHAPTERS (L, sticky flags), HOME_ORDER, JUMP_OFFSET_VH, headingId()
     store.ts, segments.ts, director.ts, anchors.ts   contracts (docs/redesign/CONTRACTS.md), §9.2–9.6
-    useChapter.ts         (scroll phase)
+    useChapter.ts         section ScrollTrigger → store (onRefresh is the only layout read), [data-reveal]
+                          reveals, onProgress / reveal callbacks, focus-in glide to the hold
+    jump.ts               §4.4 jump policy (glide ≤ 2 states, else jump cut), focusQuietly, onJumpLinkClick
   field/
     layout.ts             SINGLE SOURCE OF TRUTH for anchor boxes (vw/svh), desktop + mobile; CHART geometry,
                           card box, slot heights, MQ; resolveAnchor(); layoutCss(); applyLayoutVars()
     states/ids.ts         StateId (const object + type; enums are not allowed by erasableSyntaxOnly)
-    index.ts, uniforms.ts, tiers.ts   contracts: bootField/acquire/release, STATE_PARAMS, tier table
-    FieldCanvas.tsx, engine.ts, textures.ts, shaders/, states/s00…s10,
-    worker/, fallback2d.ts, debug.ts   (engine phases)
+    index.ts, uniforms.ts, tiers.ts   contracts: bootField/acquire/release/getField, STATE_PARAMS, tier table
+    FieldCanvas.tsx       the #field-root host: idle-callback acquire, setMode, scroll → invalidate
+    engine.ts             renderer, loop, uniform writes, tiers / probe / adaptivity, resize, context loss
+    material.ts           geometry, ShaderMaterial + glow clone, uniform objects
+    choreo.ts             hero one-shots: §6 intro, §9.5 lock print (--scan, uPrinted), hand-back
+    input.ts              pointer, touch ripple, visibility → store
+    generation.ts         worker client (jobs, supersede, lazy states); textures.ts: resident DataTextures
+    shaders/              field.vert / field.frag / noise / live .glsl (live.glsl: one case per state)
+    states/               ids.ts, common.ts (golden layout, perm, sort keys, samplers, pack), registry.ts,
+                          s00-static.ts … sNN-*.ts (pure generators), name-sampler.ts (S1, main thread)
+    worker/               generate.worker.ts, run.ts (no-Worker fallback runner), protocol.ts
+    debug.ts              ?debug=field overlay (lazy chunk); fallback2d.ts (phase 8)
   chapters/               Hero, About, CareerChart, Nda, Projects, ProjectPanel, Capabilities, Contact
   components/             Chapter, ChapterHeading, LinkLabel, Chip, SkipLink, Atmosphere, Nav, MobileMenu,
-                          Rail, Hud, Footer, CopyEmail, MotionToggle (+ CursorRing, JumpCutOverlay later)
+                          Rail, Hud, Footer, CopyEmail, MotionToggle, CursorRing, JumpCutOverlay, EmblemOutline
   pages/                  HomePage (composes chapters), ProjectDetailPage, NotFoundPage
 scripts/                  gen-layout-css.mjs, make-grain.mjs, prerender-plugin.mjs (+ .d.mts; build prerender and
                           the `vite preview` 404 fallback)
@@ -151,6 +164,8 @@ scripts/                  gen-layout-css.mjs, make-grain.mjs, prerender-plugin.m
   - `live:` means JS with full motion.
   - `rm:` means reduced motion.
   - `field-live:` and `no-field:` follow whether the WebGL field is drawing.
+  - `field-s2:` … `field-s9:` and `no-field-s10:` follow whether the field draws **that state** (`html[data-field-states]`). Use them to hide a state's DOM stand-in (chart SVG bars, emblem outlines…), never `field-live:`, so a state whose generator has not landed never leaves a hole.
+  - `intro:` applies while the §6 intro runs (`html[data-intro="running"]`).
   - **`staged:`** applies only inside a chapter whose stage is actually sticky right now. Use it for stacked or absolute stage layouts that must fall back to flow under no-js and rm.
 
 **Component classes:**

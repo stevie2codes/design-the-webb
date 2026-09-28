@@ -5,7 +5,7 @@ import { StateId } from '../field/states/ids';
  * Hairline posters of the project emblems (SPEC §3.10 S4–S7) for the paths
  * where no field draws: no JS, no WebGL, and this DOM-first baseline. They
  * sit in the emblem's anchor box (mobile field slots, the MCP App card box,
- * the detail page) and are hidden once the field is live — the same role
+ * the detail page) and are hidden once the field draws their state — the same role
  * the chart's SVG bars, the S8 plates and the S9 shell play.
  *
  * Drawn in the chapter placeholders' language: dotted strokes read as
@@ -20,6 +20,17 @@ export interface EmblemOutlineProps {
   emblem: StateId;
   className?: string;
 }
+
+/**
+ * Hidden once the field draws this emblem's own state (literal classes, so
+ * Tailwind generates them). Until its generator lands the outline stays.
+ */
+const HIDE_WHEN_DRAWN: Record<EmblemId, string> = {
+  [StateId.PULSE]: 'field-s4:hidden',
+  [StateId.LATTICE]: 'field-s5:hidden',
+  [StateId.DECK]: 'field-s6:hidden',
+  [StateId.CONSTELLATION]: 'field-s7:hidden',
+};
 
 const f = (n: number): string => String(+n.toFixed(4));
 const pts = (list: ReadonlyArray<readonly [number, number]>): string => list.map(([x, y]) => `${f(x)},${f(y)}`).join(' ');
@@ -38,7 +49,7 @@ export default function EmblemOutline({ emblem, className = '' }: EmblemOutlineP
       focusable="false"
       viewBox={body.viewBox}
       preserveAspectRatio="xMidYMid meet"
-      className={`pointer-events-none overflow-visible field-live:hidden ${className}`}
+      className={`pointer-events-none overflow-visible ${HIDE_WHEN_DRAWN[emblem as EmblemId]} ${className}`}
     >
       {body.draw(uid)}
     </svg>

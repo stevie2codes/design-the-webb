@@ -6,6 +6,9 @@ import EmblemOutline from '../components/EmblemOutline';
 import LinkLabel from '../components/LinkLabel';
 import { getNextProject, getProject, type Project } from '../content/projects';
 import { detail } from '../content/site';
+import { StateId } from '../field/states/ids';
+import { enterRoute } from '../scroll/director';
+import { store } from '../scroll/store';
 
 const TITLE_ID = 'project-title';
 
@@ -27,6 +30,16 @@ export default function ProjectDetailPage() {
   useEffect(() => {
     document.title = detail.documentTitle(project ? project.title : detail.notFound.title);
   }, [project]);
+
+  // Route mode (§9.4): the pair is locked to this project's emblem (and the
+  // next one, for the peek); an unknown slug sits over S0.
+  useEffect(() => {
+    if (!slug || !project) {
+      enterRoute(store, 'detail', slug ?? '', { a: StateId.STATIC });
+      return;
+    }
+    enterRoute(store, 'detail', slug, { a: project.emblem, b: getNextProject(slug).emblem });
+  }, [slug, project]);
 
   if (!project) return <ProjectNotFound />;
   // Keyed: "Next project" mounts a fresh page (focus, scroll-driven hooks).
@@ -57,7 +70,7 @@ function ProjectDetail({ project }: { project: Project }) {
         <header className="relative px-gutter pt-[calc(4rem+10svh)] pb-[12svh] mobile:pt-0 mobile:pb-24 desktop:min-h-svh">
           {/* The emblem (route mode, §6): centred at (74vw, 40svh) × .8 of the
               card box on desktop, (50vw, 22svh) × .7 in the slot on mobile.
-              Hairline poster until the field is live. */}
+              Hairline poster until the field draws the emblem. */}
           <div aria-hidden="true" className="field-slot" data-slot="project">
             <EmblemOutline emblem={project.emblem} className="absolute inset-[15%] size-[70%]" />
           </div>

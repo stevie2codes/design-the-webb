@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { cursorLabels } from '../content/site';
-import { gsap } from '../motion/gsap';
+import { loadGsap, reportLoadError, type GsapModule } from '../motion/lazy';
 import { getMotionPref, subscribeMotionPref } from '../motion/motionPref';
 
 /** Follow damping per 60 Hz frame, dt-corrected (§6: .18). */
@@ -33,8 +33,8 @@ function modeFor(target: EventTarget | null): Mode {
  * nothing magnetic.
  *
  * Position is a transform written in a gsap ticker callback (skipped once
- * settled); mode changes are attribute writes. No React state, aria-hidden,
- * pointer-events none, z 70.
+ * settled; gsap is lazy-loaded on first enable, §8.5); mode changes are
+ * attribute writes. No React state, aria-hidden, pointer-events none, z 70.
  */
 export default function CursorRing() {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -53,6 +53,8 @@ export default function CursorRing() {
     }
 
     let active = false;
+    let alive = true;
+    let ticker: GsapModule['gsap']['ticker'] | null = null;
     let seen = false;
     let mode: Mode = 'idle';
     let tx = 0;
@@ -109,7 +111,12 @@ export default function CursorRing() {
       document.addEventListener('pointerover', onOver, { passive: true });
       document.documentElement.addEventListener('pointerout', onLeave, { passive: true });
       window.addEventListener('blur', onBlur);
-      gsap.ticker.add(tick);
+      if (ticker) ticker.add(tick);
+      else
+        loadGsap().then(({ gsap }) => {
+          ticker = gsap.ticker;
+          if (alive && active) ticker.add(tick);
+        }, reportLoadError);
     };
     const disable = () => {
       if (!active) return;
@@ -120,7 +127,7 @@ export default function CursorRing() {
       document.removeEventListener('pointerover', onOver);
       document.documentElement.removeEventListener('pointerout', onLeave);
       window.removeEventListener('blur', onBlur);
-      gsap.ticker.remove(tick);
+      ticker?.remove(tick);
     };
     const sync = () => {
       if ((mql?.matches ?? false) && getMotionPref() === 'full') enable();
@@ -131,6 +138,7 @@ export default function CursorRing() {
     mql?.addEventListener('change', sync);
     const offMotion = subscribeMotionPref(sync);
     return () => {
+      alive = false;
       mql?.removeEventListener('change', sync);
       offMotion();
       disable();

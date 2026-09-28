@@ -1,7 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { hud } from '../content/site';
+import { isIntroPending } from '../field/index';
 import { onSample, onScrollRefresh } from '../motion/lenis';
+import { isReducedMotion } from '../motion/motionPref';
 import { filmTargetOf, frame, hudSignal, hudSignalAt } from '../scroll/director';
 import { store } from '../scroll/store';
 
@@ -24,6 +26,9 @@ const DAMP_S = 0.2;
  * (a textContent write only when the two-decimal text changes). Until the
  * field has produced a frame (no WebGL, before it is ready) it follows the
  * scroll-derived film target instead, so the readout still tells the story.
+ * While the §6 intro is expected (`html[data-intro="pending"]`, set before
+ * first paint) it reads 1.00 — the name on screen is resolved — so the intro
+ * starts from the value already shown and the readout never bounces.
  *
  * It only shows while its corner is clear of copy: while a sticky stage is
  * stuck (the stages reserve the bottom band), or while a `[data-hud-zone]`
@@ -80,8 +85,10 @@ export default function Hud() {
       }
 
       // frame.now is the gsap clock of the last rendered frame; 0 = none yet.
-      const target = frame.now > 0 ? hudSignal(frame) : hudSignalAt(filmTargetOf(store));
-      sn += (target - sn) * (1 - Math.pow(2, (-dt * 5) / DAMP_S));
+      const pending = isIntroPending();
+      const target = pending ? 1 : frame.now > 0 ? hudSignal(frame) : hudSignalAt(filmTargetOf(store));
+      // Reduced motion samples on scroll only (no loop to finish a damp): jump.
+      sn = isReducedMotion() || pending ? target : sn + (target - sn) * (1 - Math.pow(2, (-dt * 5) / DAMP_S));
       const text = (Number.isFinite(sn) ? Math.min(1, Math.max(0, sn)) : 0).toFixed(2);
       if (text !== shown) {
         shown = text;

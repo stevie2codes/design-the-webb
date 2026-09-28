@@ -28,8 +28,9 @@ export class GeneratorClient {
   private worker: Worker | null = null;
   private workerFailed = false;
   private seq = 0;
-  private latest = -1;
-  private pending: GenerateRequest | null = null;
+  /** Jobs whose replies are still wanted. */
+  private readonly live = new Set<number>();
+  private readonly queued: GenerateRequest[] = [];
   private disposed = false;
   private readonly cb: GenCallbacks;
 
@@ -52,11 +53,19 @@ export class GeneratorClient {
     }
   }
 
-  /** Start a job; a newer job supersedes the rest of older ones. Returns its id. */
-  start(job: GenJob): number {
-    const req: GenerateRequest = { type: 'generate', job: ++this.seq, ...job };
-    this.latest = req.job;
-    this.pending = req;
+  /**
+   * Start a job and return its id. By default it supersedes every earlier job
+   * (their remaining replies are dropped); `supersede: false` queues it behind
+   * them (lazy states).
+   */
+  start(job: GenJob, supersede = true): number {
+    const req: GenerateRequest = { type: 'generate', job: ++this.seq, supersede, ...job };
+    if (supersede) {
+      this.live.clear();
+      this.queued.length = 0;
+    }
+    this.live.add(req.job);
+    this.queued.push(req);
     if (this.worker && !this.workerFailed) this.worker.postMessage(req);
     else void this.runOnMain(req);
     return req.job;
@@ -64,7 +73,7 @@ export class GeneratorClient {
 
   dispose(): void {
     this.disposed = true;
-    this.latest = -1;
+    this.live.clear();
     this.worker?.terminate();
     this.worker = null;
   }
@@ -74,11 +83,11 @@ export class GeneratorClient {
     this.workerFailed = true;
     this.worker?.terminate();
     this.worker = null;
-    if (this.pending && this.pending.job === this.latest) void this.runOnMain(this.pending);
+    for (const req of this.queued) if (this.live.has(req.job)) void this.runOnMain(req);
   }
 
   private receive(r: WorkerReply): void {
-    if (this.disposed || r.job !== this.latest) return;
+    if (this.disposed || !this.live.has(r.job)) return;
     switch (r.type) {
       case 'state':
         this.cb.onState(r.job, r.id, r.pos, r.meta, r.extras, r.ms);
@@ -90,7 +99,8 @@ export class GeneratorClient {
         this.cb.onError(r.job, r.id, r.message);
         break;
       case 'done':
-        this.pending = null;
+        this.live.delete(r.job);
+        for (let i = this.queued.length - 1; i >= 0; i--) if (this.queued[i].job === r.job) this.queued.splice(i, 1);
         this.cb.onDone(r.job);
         break;
     }
@@ -100,7 +110,7 @@ export class GeneratorClient {
     const { runOne } = await import('./worker/run.ts');
     const ids = [...req.ids];
     const step = () => {
-      if (this.disposed || req.job !== this.latest) return;
+      if (this.disposed || !this.live.has(req.job)) return;
       const id = ids.shift();
       if (id === undefined) {
         this.receive({ type: 'done', job: req.job });

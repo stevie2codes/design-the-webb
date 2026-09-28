@@ -1,9 +1,13 @@
-import { Fragment } from 'react';
+import { Fragment, useRef } from 'react';
 import Chapter from '../components/Chapter';
 import LinkLabel from '../components/LinkLabel';
 import { hero } from '../content/site';
 import { headingId } from '../scroll/chapters';
 import { onJumpLinkClick } from '../scroll/jump';
+import { store } from '../scroll/store';
+
+/** §5 C0: the scroll cue fades out while the hero's sticky progress runs .02 → .08 (scrubbed, linear). */
+const CUE_FADE = [0.02, 0.08] as const;
 
 /**
  * C0 Hero — #top, sticky, L 90vh (mobile 50svh; the only chapter sticky on
@@ -33,15 +37,45 @@ import { onJumpLinkClick } from '../scroll/jump';
  * - h1 > [data-name-line]: one span per line (STEPHEN / WEBB) for the S1
  *   glyph sampler (§9.8); inline on desktop, block on mobile.
  * - [data-scroll-cue]: fades out at p .02–.08.
+ *
+ * Choreography (phase 2). Everything time-based lives in the engine
+ * (field/choreo.ts): the §6 intro (canvas fade-in over S1 printed, unprint,
+ * defocus into S0, skip on any input), the §9.5 lock print (beam + --scan +
+ * uPrinted halo, from the director's Schmitt trigger) and the hand-back at
+ * the start of seg1. The rack focus (seg0) is scrubbed by the director from
+ * scroll; the HUD climbs with it. This component only:
+ * - fades the scroll cue with sticky progress (onProgress, ref writes);
+ * - hides the cue while the intro is expected or runs (`intro:` variant:
+ *   html[data-intro] is "pending" from the pre-paint script until the
+ *   engine starts the intro or drops the guess, then "running"), so it
+ *   "appears at the end" (§6 step 4) and never blinks at first paint.
+ * Eyebrow, lede and CTAs never move (the lede captions the effect), so C0
+ * has no line masks or fade-ups. Reduced motion: no intro, no beam; the
+ * field shows S1 printed — nothing is left to resolve, so there is no cue.
  */
 export default function Hero() {
   const titleId = headingId('top');
+  const cueRef = useRef<HTMLDivElement>(null);
+  const cueShown = useRef(1);
+
+  // Sticky progress → cue opacity (no React state, §8.5). In flow (reduced
+  // motion, fit-guard fallback) progress means something else: keep it on.
+  const onProgress = (p: number) => {
+    const el = cueRef.current;
+    if (!el) return;
+    const t = store.chapters.top?.sticky ? (p - CUE_FADE[0]) / (CUE_FADE[1] - CUE_FADE[0]) : 0;
+    const o = 1 - Math.min(1, Math.max(0, t));
+    if (o === cueShown.current) return;
+    cueShown.current = o;
+    el.style.opacity = o >= 1 ? '' : o.toFixed(3);
+    el.style.visibility = o <= 0 ? 'hidden' : '';
+  };
   const words = hero.name.split(' ');
   // "Senior Product Designer — Tyler Technologies": the company never breaks.
   const [role, company] = hero.eyebrow.split(' — ');
 
   return (
-    <Chapter id="top" labelledBy={titleId} className="overflow-x-clip" hudZone>
+    <Chapter id="top" labelledBy={titleId} className="overflow-x-clip" hudZone onProgress={onProgress}>
       {/* Field anchors. S0 is full bleed; S1 registers to the <h1>. */}
       <div aria-hidden="true" data-field-anchor="S0" />
       <div aria-hidden="true" data-field-anchor="S1" />
@@ -113,16 +147,20 @@ export default function Hero() {
           1px line that runs toward the fold, max 48px, with a travelling
           dot. Hidden on short viewports, where it would crowd the CTAs. */}
       <div
+        ref={cueRef}
         aria-hidden="true"
         data-scroll-cue
-        className="t-micro pointer-events-none absolute left-1/2 top-[calc(92svh-1.01em)] flex -translate-x-1/2 flex-col items-center gap-2.5 whitespace-nowrap uppercase text-ink-2 mobile:hidden short:hidden"
+        className="t-micro pointer-events-none absolute left-1/2 top-[calc(92svh-1.01em)] -translate-x-1/2 whitespace-nowrap uppercase text-ink-2 mobile:hidden short:hidden rm:hidden"
       >
-        <span>{hero.scrollCue}</span>
-        <span className="relative block h-[clamp(0px,calc(8svh-0.29em-22px),48px)] w-px overflow-y-clip bg-line-strong">
-          <span className="absolute inset-0 animate-cue">
-            <span className="absolute top-0 left-1/2 size-[3px] -translate-x-1/2 rounded-full bg-ember" />
+        {/* Hidden while the intro is expected or runs; fades in as it ends (§6 step 4). */}
+        <div className="flex flex-col items-center gap-2.5 transition-opacity duration-700 ease-ui intro:opacity-0 intro:duration-300">
+          <span>{hero.scrollCue}</span>
+          <span className="relative block h-[clamp(0px,calc(8svh-0.29em-22px),48px)] w-px overflow-y-clip bg-line-strong">
+            <span className="absolute inset-0 animate-cue">
+              <span className="absolute top-0 left-1/2 size-[3px] -translate-x-1/2 rounded-full bg-ember" />
+            </span>
           </span>
-        </span>
+        </div>
       </div>
     </Chapter>
   );

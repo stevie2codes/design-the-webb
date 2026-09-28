@@ -166,7 +166,7 @@ function Legend() {
 }
 
 /**
- * Shown while the field is not live (no JS, no WebGL, fallback): §5 C1, §8.4.
+ * Shown until the field draws S2 (`field-s2:`; no JS, no WebGL, fallback, or before the S2 generator): §5 C1, §8.4.
  * Three layers: gridlines and the divider; the bars' quarter-year slabs
  * (HTML, so each slab tiles its own dot grid and every slab reads the same);
  * then the bar edges and caps, the "+" fizz and the AI point.
@@ -176,7 +176,7 @@ function FallbackBars({ uid }: { uid: string }) {
   const gridEnd = pct(CHART.gridEnd);
 
   return (
-    <div aria-hidden="true" className="chart-bars absolute inset-0 field-live:hidden">
+    <div aria-hidden="true" className="chart-bars absolute inset-0 field-s2:hidden">
       {/* Gridlines at 2, 4, 6 years (dotted) and the divider (dashed). */}
       <svg focusable="false" className="absolute inset-0 size-full overflow-visible">
         <g className="stroke-steel" strokeWidth={1} shapeRendering="crispEdges">

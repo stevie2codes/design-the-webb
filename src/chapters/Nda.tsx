@@ -83,7 +83,7 @@ function RedactedOutline({ className = '' }: { className?: string }) {
   return (
     <div
       aria-hidden="true"
-      className={`pointer-events-none absolute top-(--anchor-redacted-y) left-(--anchor-redacted-x) h-(--anchor-redacted-h) w-(--anchor-redacted-w) field-live:hidden ${className}`}
+      className={`pointer-events-none absolute top-(--anchor-redacted-y) left-(--anchor-redacted-x) h-(--anchor-redacted-h) w-(--anchor-redacted-w) field-s3:hidden ${className}`}
     >
       <span className="absolute inset-y-0 -left-[calc(var(--anchor-redacted-h)*0.0353)] w-px bg-ember/60" />
       {SLABS.map(({ w, top, h, lock }) => (

@@ -18,9 +18,17 @@
  *
  * Browser-only (call from effects). No layout reads per frame: windows are
  * ScrollTrigger positions, re-evaluated on refresh only.
+ *
+ * A LAZY CHUNK with SplitText (§8.5 initial JS budget): chapters get these
+ * helpers from their `reveal(ctx)` context (`ctx.lineMask`, `ctx.fadeUp`),
+ * and useChapter loads this module only for chapters that reveal. Never
+ * import it statically from code in the initial bundle.
  */
-import { DUR, EASE, gsap, ScrollTrigger, SplitText } from './gsap';
+import { SplitText } from 'gsap/SplitText';
+import { DUR, EASE, gsap, ScrollTrigger } from './gsap';
 import { isReducedMotion } from './motionPref';
+
+gsap.registerPlugin(SplitText);
 
 /** A scroll window: ScrollTrigger `trigger` / `start` / `end` (functions re-evaluate on refresh). */
 export interface RevealWindow {

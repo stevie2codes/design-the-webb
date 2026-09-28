@@ -3,9 +3,10 @@ import { flushSync } from 'react-dom';
 import { Link, useLocation } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import { nav } from '../content/site';
-import { EASE, gsap } from '../motion/gsap';
+import { loadGsap, reportLoadError } from '../motion/lazy';
 import { getLenis, onSample } from '../motion/lenis';
 import { isReducedMotion } from '../motion/motionPref';
+import { EASE } from '../motion/tokens';
 import { subscribeLayoutMode } from '../motion/useLayoutMode';
 import { activeJumpIndex, isPlainClick, JUMP_ORDER, jumpTargets, jumpToChapter, type JumpId } from '../scroll/jump';
 import { store } from '../scroll/store';
@@ -156,23 +157,36 @@ export default function Nav() {
   }, [onHome]);
 
   // The menu dims the field and stops its loop (§6); the page behind is locked.
+  // gsap is lazy (§8.5); both tweens chain on the same promise, so an open
+  // and a close always apply in order.
   useEffect(() => {
     if (!menuOpen) return;
+    let open = true;
     const lenis = getLenis();
     lenis?.stop();
     const fade = isReducedMotion() ? 0 : MENU_FADE_S;
-    gsap.to(store.fx, {
-      opacity: MENU_FIELD_OPACITY,
-      duration: fade,
-      ease: EASE.outExpo,
-      overwrite: true,
-      onComplete: () => {
-        store.flags.menuOpen = true;
-      },
-    });
+    loadGsap().then(({ gsap }) => {
+      if (!open) return;
+      gsap.to(store.fx, {
+        opacity: MENU_FIELD_OPACITY,
+        duration: fade,
+        ease: EASE.outExpo,
+        overwrite: true,
+        onComplete: () => {
+          store.flags.menuOpen = true;
+        },
+      });
+    }, reportLoadError);
     return () => {
+      open = false;
       store.flags.menuOpen = false;
-      gsap.to(store.fx, { opacity: 1, duration: isReducedMotion() ? 0 : MENU_FADE_S, ease: EASE.outExpo, overwrite: true });
+      const back = isReducedMotion() ? 0 : MENU_FADE_S;
+      loadGsap().then(
+        ({ gsap }) => gsap.to(store.fx, { opacity: 1, duration: back, ease: EASE.outExpo, overwrite: true }),
+        () => {
+          store.fx.opacity = 1;
+        },
+      );
       getLenis()?.start();
     };
   }, [menuOpen]);

@@ -14,7 +14,7 @@
  * per-frame inputs are the store, the director's reused frame and numbers
  * this module keeps.
  */
-import { Color, PerspectiveCamera, Scene, WebGLRenderer } from 'three';
+import { Color, PerspectiveCamera, Scene, Vector3, Vector4, WebGLRenderer } from 'three';
 import { gsap, ScrollTrigger } from '../motion/gsap.ts';
 import { getDebugParams } from '../debugParams.ts';
 import { CHAPTERS } from '../scroll/chapters.ts';
@@ -34,6 +34,7 @@ import { GeneratorClient, type GenJob } from './generation.ts';
 import { Choreo, INTRO } from './choreo.ts';
 import { attachInput } from './input.ts';
 import type { DebugOverlay } from './debug.ts';
+import { clearIntroPending } from './index.ts';
 import type { CreateField, FieldBootOptions, FieldHandle, FieldMode, FieldStats, PauseReason } from './index.ts';
 
 /** §8.5 idle: 30 fps after this long with no scroll, pointer, morph or one-shot. */
@@ -48,6 +49,10 @@ const REGEN_DH_FINE = 120;
 const SWAP_DIP = { to: 0.6, dur: 0.15 } as const;
 /** §8.4: crossfade back after a context restore. */
 const RESTORE_FADE_S = 0.4;
+/** Reduced motion (§8.2 on demand): how long an invalidation keeps frames coming. */
+const DIRTY_S = 0.3;
+/** §9.8: S1 is resampled in place when its anchor box changed by more than this (CSS px). */
+const NAME_RESAMPLE_PX = 0.5;
 
 const html = (): HTMLElement => document.documentElement;
 
@@ -75,6 +80,8 @@ class FieldEngine {
   private readonly gl: WebGL2RenderingContext;
   private readonly opts: FieldBootOptions;
   private readonly renderer: WebGLRenderer;
+  /** The void clear colour; re-applied after a context restore (three resets it to black). */
+  private readonly clearColor = new Color(CLEAR_COLOR);
   private readonly camera: PerspectiveCamera;
   private readonly scene: Scene;
   private readonly uniforms: FieldUniforms;
@@ -100,15 +107,30 @@ class FieldEngine {
   private dust: DustData | null = null;
   private set: TextureSet;
   private bootJob = -1;
+  /** Lazy single-state jobs (states outside the boot order, e.g. S10 on the 404). */
+  private readonly lazyJobs = new Set<number>();
+  /** Every state asked for once (boot, lazy): never re-requested. */
+  private readonly requested = new Set<StateId>();
   private pending: {
     set: TextureSet;
     job: number;
     expect: Set<StateId>;
     name: NameSample | null;
     layoutMode: typeof store.layout;
+    /** The atomic swap is fading (the set is committed at its midpoint). */
+    swapping: boolean;
   } | null = null;
+  /** A regeneration was asked for during a swap: run it once the swap commits. */
+  private regenAfterSwap = false;
   private genLayoutMode: typeof store.layout = store.layout;
   private name: NameSample | null = null;
+  /**
+   * S1's scale now vs when it was sampled (§9.8): the DOM name follows
+   * --name-fs on every resize, below the regeneration thresholds too. The
+   * in-place resample makes it 1 again; until then S1 scales with it.
+   */
+  private nameK = 1;
+  private nameResampling = false;
   private nameEls: NameElements = { h1: null, anchor: null };
   private fontUnlisten: (() => void) | null = null;
 
@@ -131,15 +153,25 @@ class FieldEngine {
   private parity = 0;
   private lastScrollY = Number.NaN;
   private menuSince = -1;
+  /** renderFrame is on the gsap ticker (always in full motion; reduced motion leaves it at rest). */
+  private ticking = false;
+  /** An invalidation arrived (reduced motion): the next frame opens a DIRTY_S render window. */
+  private dirtyReq = false;
   private dirtyUntil = 0;
   private frozenTime = 0;
   private seenVersion = -1;
   private fps = 60;
+  private rendered = 0;
   private readonly cleanups: (() => void)[] = [];
   private debug: DebugOverlay | null = null;
 
   private readonly tmp2: [number, number] = [0, 0];
   private readonly tmp4: Vec4 = [0, 0, 1, 1];
+  /** Crossfade stash (reduced-motion posters): the B side while pass A draws. */
+  private readonly xOff = new Vector4();
+  private readonly xIdle = new Vector3();
+  /** html[data-field-states]: the resident state ids, as last written. */
+  private statesAttr = '';
 
   constructor(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext, opts: FieldBootOptions) {
     this.canvas = canvas;
@@ -167,7 +199,7 @@ class FieldEngine {
       premultipliedAlpha: true,
       powerPreference: 'default',
     });
-    this.renderer.setClearColor(new Color(CLEAR_COLOR), 1);
+    this.renderer.setClearColor(this.clearColor, 1);
     this.renderer.setPixelRatio(this.dpr);
     this.camera = new PerspectiveCamera(30, 1, 0.1, 50);
     this.camera.position.set(0, 0, CAMERA_Z);
@@ -273,7 +305,7 @@ class FieldEngine {
     setFilmCeiling(0);
     html().setAttribute('data-tier', this.tier);
     this.listen();
-    gsap.ticker.add(this.renderFrame);
+    this.startTicking();
     if (this.opts.debug) {
       void import('./debug.ts').then(({ createDebugOverlay }) => {
         if (this.disposed) return;
@@ -296,12 +328,14 @@ class FieldEngine {
     this.set = new TextureSet(spec.texH, view.W, view.H);
     this.genLayoutMode = store.layout;
     this.bootJob = this.gen.start(this.jobFor(WORKER_BOOT_ORDER, view));
+    for (const id of WORKER_BOOT_ORDER) this.requested.add(id);
+    this.requested.add(StateId.NAME);
 
     const fontReady = await waitForNameFont();
     if (this.disposed) return;
     await new Promise<void>((r) => whenIdle(r));
     if (this.disposed) return;
-    this.name = this.sampleNameInto(this.set, view);
+    this.setName(this.sampleNameInto(this.set, view));
     if (!fontReady) this.listenForFont();
     this.onSetChanged();
     this.maybeReady();
@@ -337,6 +371,59 @@ class FieldEngine {
     return sample;
   }
 
+  private setName(n: NameSample | null): void {
+    this.name = n;
+    this.updateNameScale();
+  }
+
+  /** nameK = the S1 anchor's measured width now / at sampling (1 without a measurement). */
+  private updateNameScale(): void {
+    const n = this.name;
+    const rec = store.anchors.get(StateId.NAME);
+    this.nameK = n && rec && n.anchorW > 0 && rec.w > 0 ? rec.w / n.anchorW : 1;
+  }
+
+  /**
+   * Resample S1 into the resident set, in place (§9.8): two same-size
+   * texture uploads, not a regeneration. Coalesced into one idle callback.
+   * It keeps the set's generation size (px-registered, like every state).
+   */
+  private resampleName(after?: () => void): void {
+    if (this.nameResampling) return;
+    this.nameResampling = true;
+    whenIdle(() => {
+      this.nameResampling = false;
+      if (this.disposed || !this.layout) return;
+      const svh = this.viewport().svh;
+      const p = this.pending;
+      if (p) {
+        // A regeneration in flight: its own S1 (swapped atomically), if already sampled.
+        const g = p.set;
+        if (p.name) p.name = this.sampleNameInto(g, { W: g.genW, H: g.genH, A: g.genW / g.genH, svh });
+      } else {
+        const g = this.set;
+        this.setName(this.sampleNameInto(g, { W: g.genW, H: g.genH, A: g.genW / g.genH, svh }));
+      }
+      after?.();
+      this.wake();
+    });
+  }
+
+  /**
+   * S1 registers to the DOM glyphs, not to the viewport (§9.8): whenever its
+   * anchor box no longer matches the sample (the h1 rescaled with --name-fs
+   * on a resize below the §9.7 thresholds), resample it in place. Called on
+   * store refreshes and after the resize debounce; a full regeneration
+   * (pending) resamples S1 itself.
+   */
+  private checkName(): void {
+    this.updateNameScale();
+    const n = this.name;
+    const rec = store.anchors.get(StateId.NAME);
+    if (!this.ready || !n || n.source !== 'dom' || !rec || this.pending || this.resizeTimer !== null) return;
+    if (Math.abs(rec.w - n.anchorW) > NAME_RESAMPLE_PX || Math.abs(rec.h - n.anchorH) > NAME_RESAMPLE_PX) this.resampleName();
+  }
+
   /** §9.8: the h1 font arrived after sampling → resample S1 once, re-upload, refresh ScrollTrigger. */
   private listenForFont(): void {
     const fonts = document.fonts;
@@ -344,13 +431,7 @@ class FieldEngine {
     const onDone = () => {
       if (!isNameFontReady()) return;
       this.fontUnlisten?.();
-      whenIdle(() => {
-        if (this.disposed) return;
-        const set = this.set;
-        this.name = this.sampleNameInto(set, { W: set.genW, H: set.genH, A: set.genW / set.genH, svh: this.viewport().svh });
-        ScrollTrigger.refresh();
-        this.wake();
-      });
+      this.resampleName(() => ScrollTrigger.refresh());
     };
     fonts.addEventListener('loadingdone', onDone);
     this.fontUnlisten = () => {
@@ -361,7 +442,7 @@ class FieldEngine {
 
   private onState(job: number, id: StateId, pos: Float32Array, meta: Uint8Array, extras?: Record<string, number[]>): void {
     if (this.disposed) return;
-    if (job === this.bootJob) {
+    if (job === this.bootJob || this.lazyJobs.has(job)) {
       this.set.set(id, pos, meta, extras);
       this.onSetChanged();
       this.maybeReady();
@@ -369,6 +450,15 @@ class FieldEngine {
       this.pending.set.set(id, pos, meta, extras);
       this.maybeSwap();
     }
+  }
+
+  /** §3.4: S10 (and any state outside the boot order) is generated when a frame first needs it. */
+  private requestLazy(id: StateId): void {
+    if (this.requested.has(id) || !this.layout) return;
+    this.requested.add(id);
+    const g = this.set;
+    const view = { W: g.genW, H: g.genH, A: g.genW / g.genH, svh: this.viewport().svh };
+    this.lazyJobs.add(this.gen.start(this.jobFor([id], view), false));
   }
 
   private onMissing(job: number, id: StateId): void {
@@ -381,6 +471,14 @@ class FieldEngine {
   /** The resident set changed: film ceiling (§9.9) and per-state uniform extras. */
   private onSetChanged(): void {
     setFilmCeiling(Math.max(0, this.set.ceiling()));
+    // CSS stand-ins (the chart's SVG bars, emblem outlines…) stay until
+    // their state is actually drawn: html[data-field-states~="k"].
+    let ids = '';
+    for (let id = 0; id <= StateId.FLATLINE; id++) if (this.set.has(id as StateId)) ids += ids ? ` ${id}` : `${id}`;
+    if (ids !== this.statesAttr) {
+      this.statesAttr = ids;
+      html().setAttribute('data-field-states', ids);
+    }
     const piv = this.set.extras[StateId.CHART]?.uBarPivot;
     if (piv) this.uniforms.uBarPivot.value.set(piv.slice(0, this.uniforms.uBarPivot.value.length));
     this.wake();
@@ -403,10 +501,17 @@ class FieldEngine {
       heroP < HERO_P[store.layout].p0;
 
     // §6 step 2: one frame rendered off-screen (the canvas is still at 0), then fade in.
+    this.choreo.attach();
     if (intro) {
+      // Override first, so the off-screen frame (it compiles the programs
+      // while the canvas is still at 0) is already the intro's S1 printed —
+      // the frame the HUD reads next (1.00, like the pending guess).
       void this.choreo.runIntro();
       this.renderNow();
     } else {
+      // The pre-paint script guessed an intro (html[data-intro="pending"]
+      // holds the scroll cue and the HUD); it will not run.
+      clearIntroPending();
       this.renderNow();
       gsap.to(this.canvas, { opacity: 1, duration: this.mode === 'full' ? INTRO.lateFadeIn : 0.2, ease: 'none' });
       if (this.mode === 'full') this.choreo.syncToLock(INTRO.lateFadeIn);
@@ -437,19 +542,30 @@ class FieldEngine {
   private frameAt(time: number, deltaMs: number, force = false): void {
     const s = store;
     if (s.version !== this.seenVersion) this.onStoreVersion();
-    if (this.ready && s.layout !== this.genLayoutMode && !this.pending) this.regenerate();
+    if (this.ready && s.layout !== this.genLayoutMode) this.regenerate();
 
     const f = tick(s, deltaMs / 1000, time);
     this.frameCutting = f.cutting;
+    if (!this.set.has(f.a)) this.requestLazy(f.a);
+    if (!this.set.has(f.b)) this.requestLazy(f.b);
     if (f.lockEdge !== 0) this.choreo.onLockEdge(f.lockEdge);
     if (this.dead || this.lost) return;
 
     const active = this.isActive(f, time);
+    if (this.dirtyReq) {
+      // Opened here, on the ticker's clock: gsap.ticker.time is stale while it sleeps.
+      this.dirtyReq = false;
+      this.dirtyUntil = Math.max(this.dirtyUntil, time + DIRTY_S);
+    }
     if (!force) {
       if (this.isPaused(time)) return;
       if (this.mode === 'reduced') {
-        // On demand (§8.2): render while invalidated or still settling.
-        if (time > this.dirtyUntil && f.settled) return;
+        // On demand (§8.2): render while invalidated or still settling; at
+        // rest leave the ticker, so gsap can sleep (no rAF loop at rest).
+        if (time > this.dirtyUntil && f.settled) {
+          this.stopTicking();
+          return;
+        }
         if (!f.settled) this.dirtyUntil = Math.max(this.dirtyUntil, time + 0.1);
       } else if (!active && time - this.lastActive > IDLE_AFTER_S && (++this.parity & 1) === 1) {
         return; // 30 fps idle throttle
@@ -457,7 +573,9 @@ class FieldEngine {
     }
 
     this.writeUniforms(f);
-    this.renderer.render(this.scene, this.camera);
+    if (this.mode === 'reduced' && f.seg < 0 && f.a !== f.b && store.film.override === null) this.renderCrossfade(f);
+    else this.renderer.render(this.scene, this.camera);
+    this.rendered++;
     this.debug?.afterRender(f);
     if (!force) this.measure(deltaMs);
   }
@@ -470,11 +588,15 @@ class FieldEngine {
       act = true;
     }
     if (f.ripple[2] >= 0 && time - f.ripple[2] < 0.6) act = true;
+    // Damped values still converging (a resting pointer does not count: §8.5
+    // idles after 6 s without pointer *moves*).
+    const p = store.pointer;
+    const mouseTarget = p.active && p.fine && store.mode === 'full' ? 1 : 0;
     if (
       Math.abs(f.charge - fx.charge) > 1e-3 ||
       Math.abs(f.disperse - fx.disperse) > 1e-3 ||
       Math.abs(f.focusOn - fx.focusOn) > 1e-3 ||
-      f.mouseAmt > 1e-3
+      Math.abs(f.mouseAmt - mouseTarget) > 1e-3
     ) {
       act = true;
     }
@@ -493,16 +615,36 @@ class FieldEngine {
     return false;
   }
 
-  private wake(): void {
-    const t = gsap.ticker.time;
-    this.lastActive = t;
-    if (this.mode === 'reduced') this.dirtyUntil = Math.max(this.dirtyUntil, t + 0.3);
+  /** Input or a one-shot: full rate now; under reduced motion only scroll / state changes render. */
+  private wake(source: 'scroll' | 'pointer' | 'state' = 'state'): void {
+    this.lastActive = gsap.ticker.time;
+    if (this.mode === 'reduced' && source !== 'pointer') {
+      this.dirtyReq = true;
+      this.startTicking();
+    }
   }
 
   private invalidate(): void {
-    const t = gsap.ticker.time;
-    this.dirtyUntil = Math.max(this.dirtyUntil, t + 0.3);
-    this.lastActive = t;
+    this.lastActive = gsap.ticker.time;
+    this.dirtyReq = true;
+    this.startTicking();
+  }
+
+  /**
+   * Put renderFrame on the gsap ticker (this wakes a sleeping ticker, which
+   * may run one tick synchronously). Full motion keeps it there for good;
+   * reduced motion removes it at rest (§8.2, §8.5: on demand, no rAF loop).
+   */
+  private startTicking(): void {
+    if (this.ticking || this.disposed) return;
+    this.ticking = true;
+    gsap.ticker.add(this.renderFrame);
+  }
+
+  private stopTicking(): void {
+    if (!this.ticking) return;
+    this.ticking = false;
+    gsap.ticker.remove(this.renderFrame);
   }
 
   /** Uniform writes (§9.5 step 3.2): numbers only, into preallocated objects. */
@@ -519,13 +661,14 @@ class FieldEngine {
     u.uKindB.value = f.b;
 
     // px-registered states keep their px size until a regeneration catches up
-    // with a height change; viewport-relative S0 is authored in su.
+    // with a height change; viewport-relative S0 is authored in su. S1 also
+    // follows the DOM name's scale until its in-place resample lands (§9.8).
     const gs = set.genH > 0 && H > 0 ? set.genH / H : 1;
     const t = this.tmp2;
     pxToSu(f.offA[0], f.offA[1], W, H, t);
-    u.uOffA.value.set(t[0], t[1], f.offA[2] * (f.a === StateId.STATIC ? 1 : gs), f.offA[3]);
+    u.uOffA.value.set(t[0], t[1], f.offA[2] * this.stateScale(f.a, gs), f.offA[3]);
     pxToSu(f.offB[0], f.offB[1], W, H, t);
-    u.uOffB.value.set(t[0], t[1], f.offB[2] * (f.b === StateId.STATIC ? 1 : gs), f.offB[3]);
+    u.uOffB.value.set(t[0], t[1], f.offB[2] * this.stateScale(f.b, gs), f.offB[3]);
 
     u.uMix.value = f.mix;
     u.uStagger.value = f.stagger;
@@ -579,6 +722,58 @@ class FieldEngine {
     u.uExposure.value = f.exposure;
   }
 
+  /** Uniform scale of a state's local su (see writeUniforms). */
+  private stateScale(id: StateId, gs: number): number {
+    return id === StateId.STATIC ? 1 : id === StateId.NAME ? gs * this.nameK : gs;
+  }
+
+  /**
+   * Reduced-motion posters (§8.2): a 400 ms CROSSFADE, not a morph. Two
+   * passes over the same scene: A alone at α·(1 − mix), then B alone at
+   * α·mix (each pass binds its state on both sides of the pair at mix 0,
+   * with that state's resting aperture).
+   */
+  private renderCrossfade(f: Readonly<FieldFrame>): void {
+    const u = this.uniforms;
+    const base = u.uOpacity.value;
+    const posB = u.uPosB.value;
+    const metaB = u.uMetaB.value;
+    const kindB = u.uKindB.value;
+    const timeB = u.uTimeB.value;
+    const densB = u.uDensityB.value;
+    this.xOff.copy(u.uOffB.value);
+    this.xIdle.copy(u.uIdleB.value);
+    u.uMix.value = 0;
+
+    // Pass A: A on both sides.
+    u.uPosB.value = u.uPosA.value;
+    u.uMetaB.value = u.uMetaA.value;
+    u.uKindB.value = u.uKindA.value;
+    u.uTimeB.value = u.uTimeA.value;
+    u.uDensityB.value = u.uDensityA.value;
+    u.uOffB.value.copy(u.uOffA.value);
+    u.uIdleB.value.copy(u.uIdleA.value);
+    u.uAperture.value = STATE_PARAMS[f.a].aperture;
+    u.uOpacity.value = base * (1 - f.mix);
+    this.renderer.render(this.scene, this.camera);
+
+    // Pass B: B on both sides, added over A.
+    u.uPosA.value = u.uPosB.value = posB;
+    u.uMetaA.value = u.uMetaB.value = metaB;
+    u.uKindA.value = u.uKindB.value = kindB;
+    u.uTimeA.value = u.uTimeB.value = timeB;
+    u.uDensityA.value = u.uDensityB.value = densB;
+    u.uOffA.value.copy(this.xOff);
+    u.uOffB.value.copy(this.xOff);
+    u.uIdleA.value.copy(this.xIdle);
+    u.uIdleB.value.copy(this.xIdle);
+    u.uAperture.value = STATE_PARAMS[f.b].aperture;
+    u.uOpacity.value = base * f.mix;
+    this.renderer.autoClear = false;
+    this.renderer.render(this.scene, this.camera);
+    this.renderer.autoClear = true;
+  }
+
   /** The printed name's left / right edge in world su (h1 box + the S1 anchor now). */
   private nameSpan(out: [number, number]): [number, number] | null {
     const n = this.name;
@@ -586,7 +781,7 @@ class FieldEngine {
     const a = anchorTransform(StateId.NAME, store, this.tmp4);
     const gs = this.set.genH > 0 ? this.set.genH / this.H : 1;
     pxToSu(a[0], a[1], this.W, this.H, this.tmp2);
-    const k = a[2] * gs;
+    const k = a[2] * this.stateScale(StateId.NAME, gs);
     out[0] = this.tmp2[0] + n.bounds.x0 * k;
     out[1] = this.tmp2[0] + n.bounds.x1 * k;
     return out;
@@ -657,10 +852,14 @@ class FieldEngine {
     this.resizeTimer = setTimeout(() => {
       this.resizeTimer = null;
       this.maybeRegenerate();
+      this.checkName();
     }, RESIZE_DEBOUNCE_MS);
   }
 
-  /** A ScrollTrigger refresh bumped store.version: rebind the hero h1, maybe regenerate. */
+  /**
+   * A ScrollTrigger refresh bumped store.version: rebind the hero h1, maybe
+   * regenerate (§9.7), and keep S1 on the DOM glyphs (§9.8).
+   */
   private onStoreVersion(): void {
     this.seenVersion = store.version;
     const els = findNameElements();
@@ -668,21 +867,16 @@ class FieldEngine {
       this.nameEls = els;
       this.choreo.refreshDom();
       // S1 was synthesised from layout.ts (no hero at boot): sample the real glyphs now.
-      if (this.ready && els.h1 && this.name?.source === 'layout') {
-        whenIdle(() => {
-          if (this.disposed) return;
-          const set = this.set;
-          this.name = this.sampleNameInto(set, { W: set.genW, H: set.genH, A: set.genW / set.genH, svh: this.viewport().svh });
-          this.wake();
-        });
-      }
+      if (this.ready && els.h1 && this.name?.source === 'layout') this.resampleName();
     }
     this.maybeRegenerate();
+    this.checkName();
   }
 
   private maybeRegenerate(): void {
-    if (!this.ready || this.disposed || this.pending) return;
-    const g = this.set;
+    if (!this.ready || this.disposed) return;
+    // A job in flight for another size is superseded (the worker drops it).
+    const g = this.pending ? this.pending.set : this.set;
     const dW = Math.abs(this.W - g.genW);
     const dH = Math.abs(this.H - g.genH);
     const turned = this.W > this.H !== g.genW > g.genH;
@@ -694,14 +888,24 @@ class FieldEngine {
   /** §9.7: worker regenerates while the main thread resamples S1; swap atomically when all are back. */
   private regenerate(): void {
     if (!this.layout) return;
+    if (this.pending?.swapping) {
+      this.regenAfterSwap = true;
+      return;
+    }
     const view = this.viewport();
     const expect = new Set<StateId>();
     for (let id = 0; id <= StateId.FLATLINE; id++) if (this.set.has(id as StateId)) expect.add(id as StateId);
+    // The boot order plus any lazily requested state (resident or in flight:
+    // a superseded lazy job would otherwise never deliver).
     const ids: StateId[] = [...WORKER_BOOT_ORDER];
-    if (this.set.has(StateId.FLATLINE)) ids.push(StateId.FLATLINE);
+    for (const id of this.requested) {
+      if (id === StateId.NAME || ids.includes(id)) continue;
+      ids.push(id);
+      expect.add(id);
+    }
     this.pending?.set.dispose();
     const next = new TextureSet(TIERS[this.texTier].texH, view.W, view.H);
-    this.pending = { set: next, job: -1, expect, name: null, layoutMode: store.layout };
+    this.pending = { set: next, job: -1, expect, name: null, layoutMode: store.layout, swapping: false };
     this.genLayoutMode = store.layout;
     this.pending.job = this.gen.start(this.jobFor(ids, view));
     whenIdle(() => {
@@ -713,9 +917,9 @@ class FieldEngine {
 
   private maybeSwap(): void {
     const p = this.pending;
-    if (!p || !p.name) return;
+    if (!p || !p.name || p.swapping) return;
     for (const id of p.expect) if (!p.set.has(id)) return;
-    this.pending = null;
+    p.swapping = true;
     this.swapping = true;
     const next = p.set;
     gsap
@@ -729,9 +933,18 @@ class FieldEngine {
         if (this.disposed) return;
         const old = this.set;
         this.set = next;
-        this.name = p.name;
+        this.setName(p.name);
+        // States of that job still in flight now land in the resident set.
+        this.bootJob = p.job;
+        this.lazyJobs.clear();
+        if (this.pending === p) this.pending = null;
         old.dispose();
         this.onSetChanged();
+        if (this.regenAfterSwap) {
+          this.regenAfterSwap = false;
+          this.maybeRegenerate();
+        }
+        this.checkName();
       })
       .to(this.opacityMul, { v: 1, duration: SWAP_DIP.dur, ease: 'none' });
   }
@@ -742,7 +955,7 @@ class FieldEngine {
   private listen(): void {
     this.cleanups.push(
       attachInput({
-        wake: () => this.wake(),
+        wake: (source) => this.wake(source),
         visibility: (hidden) => {
           if (!hidden) this.wake();
         },
@@ -761,6 +974,7 @@ class FieldEngine {
       window.addEventListener('resize', onResize);
       this.cleanups.push(() => window.removeEventListener('resize', onResize));
     }
+    this.watchDpr();
 
     const lost = (e: Event) => {
       e.preventDefault();
@@ -768,6 +982,8 @@ class FieldEngine {
       this.lossCount++;
       this.choreo.release();
       html().removeAttribute('data-field');
+      html().removeAttribute('data-field-states');
+      this.statesAttr = '';
       gsap.killTweensOf(this.canvas);
       this.canvas.style.opacity = '0';
       // TODO(phase8-engine): show the Canvas2D fallback (fallback2d.ts) from the cached arrays.
@@ -776,8 +992,12 @@ class FieldEngine {
     const restored = () => {
       if (this.dead || this.disposed) return;
       this.lost = false;
+      // three's context restore rebuilds its background state with a black
+      // clear colour (WebGLBackground defaults): put the void back.
+      this.renderer.setClearColor(this.clearColor, 1);
       this.set.touch();
       html().setAttribute('data-field', 'live');
+      this.onSetChanged();
       this.renderNow();
       gsap.to(this.canvas, { opacity: 1, duration: RESTORE_FADE_S, ease: 'none' });
       this.choreo.resume();
@@ -788,6 +1008,40 @@ class FieldEngine {
     this.cleanups.push(() => {
       this.canvas.removeEventListener('webglcontextlost', lost, false);
       this.canvas.removeEventListener('webglcontextrestored', restored, false);
+    });
+  }
+
+  /**
+   * The device-pixel ratio follows the screen (a window dragged to a retina
+   * display, browser zoom): `(resolution: Ndppx)` stops matching when it
+   * changes, and the query is re-armed for the new ratio. The ResizeObserver
+   * only sees CSS size. Once the adaptive 'dpr' step has fired, DPR stays 1.
+   */
+  private watchDpr(): void {
+    let mql: MediaQueryList | null = null;
+    const onChange = () => {
+      arm();
+      if (this.disposed || this.fired.includes('dpr')) return;
+      const next = Math.min(window.devicePixelRatio || 1, dprCap(this.texTier, this.cores));
+      if (Math.abs(next - this.dpr) < 1e-3) return;
+      this.dpr = next;
+      this.renderer.setPixelRatio(next);
+      this.renderer.setSize(this.W, this.H, false);
+      this.wake();
+    };
+    const arm = () => {
+      mql?.removeEventListener('change', onChange);
+      try {
+        mql = window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+        mql.addEventListener('change', onChange);
+      } catch {
+        mql = null;
+      }
+    };
+    arm();
+    this.cleanups.push(() => {
+      mql?.removeEventListener('change', onChange);
+      mql = null;
     });
   }
 
@@ -820,13 +1074,21 @@ class FieldEngine {
       glow: this.glowOn,
       bokehCap: this.bokehCap,
       fps: this.fps,
+      rendered: this.rendered,
+      canvas: [this.W, this.H],
+      generatedFor: [this.set.genW, this.set.genH],
       ceiling: this.set.ceiling(),
       resident: Array.from({ length: StateId.FLATLINE + 1 }, (_, i) => i).filter((i) => this.set.has(i as StateId)),
       adaptive: [...this.fired],
       lost: this.lost || this.dead,
       intro: this.choreo.introRunning,
       name: this.name
-        ? { source: this.name.source, fontReady: this.name.fontReady, ms: Math.round(this.name.ms * 10) / 10 }
+        ? {
+            source: this.name.source,
+            fontReady: this.name.fontReady,
+            ms: Math.round(this.name.ms * 10) / 10,
+            scale: Math.round(this.nameK * 1e4) / 1e4,
+          }
         : null,
       cores: this.cores,
     };
@@ -835,7 +1097,7 @@ class FieldEngine {
   private dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    gsap.ticker.remove(this.renderFrame);
+    this.stopTicking();
     if (this.resizeTimer !== null) clearTimeout(this.resizeTimer);
     for (const fn of this.cleanups.splice(0)) fn();
     this.fontUnlisten?.();
@@ -856,7 +1118,9 @@ class FieldEngine {
     this.debug?.dispose();
     this.debug = null;
     html().removeAttribute('data-field');
+    html().removeAttribute('data-field-states');
     html().removeAttribute('data-tier');
+    clearIntroPending();
     this.canvas.style.opacity = '0';
     setFilmCeiling(FILM_MAX);
     this.readyCbs.clear();

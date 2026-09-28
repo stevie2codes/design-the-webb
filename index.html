@@ -12,6 +12,11 @@
       //    asks for reduced motion and they have not explicitly chosen "Full"
       //  - data-layout: the mobile rule (keep in sync with MQ.mobile in
       //    src/field/layout.ts and the `mobile` variant in src/index.css)
+      //  - data-intro="pending": the §6 intro will probably run (full motion,
+      //    home, no ?intro=0 / ?film=, no forced colors; the page always opens
+      //    at the top). The scroll cue waits and the HUD reads 1.00 until the
+      //    engine runs the intro ("running") or drops the guess; a CSS
+      //    failsafe shows the cue after 4 s if nothing ever answers.
       (function () {
         var d = document.documentElement;
         d.className = d.className.replace(/\bno-js\b/, 'js');
@@ -25,6 +30,14 @@
           mobile = matchMedia('(max-width: 1023.98px) and (orientation: portrait), (max-width: 767.98px) and (min-height: 500px)').matches;
         } catch (e) {}
         d.setAttribute('data-layout', mobile ? 'mobile' : 'desktop');
+        var q = location.search;
+        var forced = false;
+        try { forced = matchMedia('(forced-colors: active)').matches; } catch (e) {}
+        var film = /[?&]film=\s*-?[\d.]/.test(q);
+        var introOff = /[?&]intro=(0|false|off)(&|$)/i.test(q);
+        if (!d.classList.contains('rm') && !forced && !film && !introOff && location.pathname === '/') {
+          d.setAttribute('data-intro', 'pending');
+        }
       })();
     </script>
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />

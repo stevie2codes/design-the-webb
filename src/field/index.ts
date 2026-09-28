@@ -65,6 +65,25 @@ export interface FieldIntro {
   readonly running: boolean;
 }
 
+/**
+ * `html[data-intro]` (CSS: the `intro:` variant; the HUD): "pending" is the
+ * pre-paint script's guess that the intro will run (JS, full motion, home at
+ * the top, no `?intro=0` / `?film`, no forced colors) — it holds the scroll
+ * cue and shows the HUD at 1.00 (the name is resolved) until the engine
+ * decides; "running" while it runs (field/choreo.ts); absent otherwise.
+ */
+export const INTRO_ATTR = 'data-intro';
+
+/** The pre-paint guess is still standing (read by the HUD sampler; an attribute read, no layout). */
+export function isIntroPending(): boolean {
+  return typeof document !== 'undefined' && document.documentElement.getAttribute(INTRO_ATTR) === 'pending';
+}
+
+/** The intro will not run (engine decision, no renderer, reduced motion, forced colors): drop the guess. */
+export function clearIntroPending(): void {
+  if (isIntroPending()) document.documentElement.removeAttribute(INTRO_ATTR);
+}
+
 /** A snapshot for QA / the debug overlay (`window.__field.stats()`). */
 export interface FieldStats {
   readonly ready: boolean;
@@ -81,6 +100,11 @@ export interface FieldStats {
   readonly glow: boolean;
   readonly bokehCap: number;
   readonly fps: number;
+  /** Frames rendered so far (QA: idle throttle, on-demand rendering). */
+  readonly rendered: number;
+  /** Canvas CSS size [W, H] and the size the resident textures were generated for (§9.7). */
+  readonly canvas: readonly [number, number];
+  readonly generatedFor: readonly [number, number];
   /** Highest k with S0…Sk resident (the director's film ceiling). */
   readonly ceiling: number;
   /** State ids with resident textures. */
@@ -89,8 +113,17 @@ export interface FieldStats {
   readonly adaptive: readonly string[];
   readonly lost: boolean;
   readonly intro: boolean;
-  /** S1 sampling: from the DOM h1 or the layout.ts fallback; font state; ms. */
-  readonly name: { readonly source: 'dom' | 'layout'; readonly fontReady: boolean; readonly ms: number } | null;
+  /**
+   * S1 sampling: from the DOM h1 or the layout.ts fallback; font state; ms;
+   * scale = the S1 anchor's width now / at sampling (1 when the sample is
+   * current; otherwise S1 is scaled by it until the in-place resample, §9.8).
+   */
+  readonly name: {
+    readonly source: 'dom' | 'layout';
+    readonly fontReady: boolean;
+    readonly ms: number;
+    readonly scale: number;
+  } | null;
   readonly cores: number;
 }
 

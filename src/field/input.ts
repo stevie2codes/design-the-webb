@@ -16,7 +16,7 @@ const INTERACTIVE = 'a,button,input,select,textarea,label,summary,[role="button"
 
 export interface InputHooks {
   /** Any input: the idle throttle resumes full rate. */
-  wake(): void;
+  wake(source: 'scroll' | 'pointer'): void;
   /** Visibility changed. */
   visibility(hidden: boolean): void;
 }
@@ -40,7 +40,7 @@ export function attachInput(hooks: InputHooks): () => void {
     p.x = e.clientX;
     p.y = e.clientY;
     p.active = true;
-    hooks.wake();
+    hooks.wake('pointer');
   };
   const leave = () => {
     p.active = false;
@@ -53,7 +53,7 @@ export function attachInput(hooks: InputHooks): () => void {
   let downY = 0;
   let downId = -1;
   const down = (e: PointerEvent) => {
-    hooks.wake();
+    hooks.wake('pointer');
     if (e.pointerType !== 'touch') return;
     downX = e.clientX;
     downY = e.clientY;
@@ -72,7 +72,7 @@ export function attachInput(hooks: InputHooks): () => void {
     r[1] = e.clientY;
     r[2] = now;
     r[3] = 1;
-    hooks.wake();
+    hooks.wake('pointer');
   };
   const vis = () => {
     store.flags.hidden = document.hidden;
@@ -86,7 +86,7 @@ export function attachInput(hooks: InputHooks): () => void {
   window.addEventListener('blur', leave);
   document.documentElement.addEventListener('mouseleave', docLeave);
   document.addEventListener('visibilitychange', vis);
-  const scroll = () => hooks.wake();
+  const scroll = () => hooks.wake('scroll');
   window.addEventListener('scroll', scroll, passive);
   store.flags.hidden = document.hidden;
 

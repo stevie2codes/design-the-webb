@@ -7,6 +7,8 @@ import Nda from '../chapters/Nda';
 import Projects from '../chapters/Projects';
 import { siteTitle } from '../content/site';
 import { useLayoutMode } from '../motion/useLayoutMode';
+import { enterRoute } from '../scroll/director';
+import { store } from '../scroll/store';
 
 /**
  * The home film (SPEC §1, §4): C0 Hero → C1 About → C2 NDA → C3 Side
@@ -19,6 +21,9 @@ export default function HomePage() {
   useEffect(() => {
     document.title = siteTitle;
   }, []);
+
+  // The director follows scroll again (§9.4): no route override.
+  useEffect(() => enterRoute(store, 'home'), []);
 
   return (
     <Fragment key={layout}>

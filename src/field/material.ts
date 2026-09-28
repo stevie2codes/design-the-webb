@@ -217,7 +217,10 @@ export function createMeshes(N: number, uniforms: FieldUniforms, opts: { lowTier
   glowGeometry.setAttribute('aSeed', seed);
 
   const defines: Record<string, string> = { FIELD_GAIN: FIELD_GAIN.toFixed(3) };
-  if (opts.lowTier) defines.IDLE_SIN = '';
+  if (opts.lowTier) {
+    defines.IDLE_SIN = '';
+    defines.TIER_LOW = '';
+  }
   const base = {
     glslVersion: GLSL3,
     vertexShader: VERTEX,

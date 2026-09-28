@@ -84,7 +84,7 @@ export default function ProjectPanel({ project, active = false }: ProjectPanelPr
           className="absolute top-(--panel-card-y) left-(--panel-card-x) h-(--panel-card-h) w-(--panel-card-w) scale-90"
         />
         {isLattice && (
-          <RowsCounter className="absolute bottom-1 left-gutter hidden live:field-live:block" />
+          <RowsCounter className="absolute bottom-1 left-gutter hidden live:field-s5:block" />
         )}
       </div>
 
@@ -92,7 +92,7 @@ export default function ProjectPanel({ project, active = false }: ProjectPanelPr
       <div aria-hidden="true" data-field-anchor={anchor} className="mobile:hidden" />
       {isLattice && (
         // Under the emblem during the silhouette hold (stage mode, live field only).
-        <RowsCounter className="absolute top-[calc(var(--panel-card-y)+var(--panel-card-h)+16px)] left-(--panel-card-x) hidden staged:field-live:block" />
+        <RowsCounter className="absolute top-[calc(var(--panel-card-y)+var(--panel-card-h)+16px)] left-(--panel-card-x) hidden staged:field-s5:block" />
       )}
 
       <div className={`px-gutter desktop:w-[calc(38vw-var(--gutter))] desktop:shrink-0 desktop:px-0 ${TEXT_COLUMN[project.side]}`}>
@@ -213,7 +213,7 @@ function EmblemOnly({ emblem }: { emblem: Project['emblem'] }) {
     <div data-card className={`relative z-1 mt-10 mobile:mt-8 ${CARD_BOX}`}>
       <div
         aria-hidden="true"
-        className="relative w-full rounded-media border border-line field-live:invisible mobile:hidden desktop:h-(--panel-card-h)"
+        className="relative w-full rounded-media border border-line field-s7:invisible mobile:hidden desktop:h-(--panel-card-h)"
       >
         <EmblemOutline emblem={emblem} className="absolute inset-0 size-full scale-90" />
       </div>

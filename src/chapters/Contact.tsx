@@ -182,7 +182,7 @@ function Portrait({ variant }: { variant: 'aside' | 'inline' }) {
  * Until the field is live (this DOM-first baseline, no WebGL) the S9 box
  * shows the beacon as hairlines: the shell (a dotted circle at R) and the
  * ring (r 1.45R, tilted 18°, seen nearly edge-on). The CTA disc is the core.
- * Hidden once the field is live.
+ * Hidden once the field draws S9 (`field-s9:`).
  */
 function BeaconOutline() {
   return (
@@ -190,7 +190,7 @@ function BeaconOutline() {
       aria-hidden="true"
       focusable="false"
       viewBox="-1 -1 2 2"
-      className="pointer-events-none absolute top-(--anchor-beacon-y) left-(--anchor-beacon-x) size-(--anchor-beacon-w) overflow-visible field-live:hidden"
+      className="pointer-events-none absolute top-(--anchor-beacon-y) left-(--anchor-beacon-x) size-(--anchor-beacon-w) overflow-visible field-s9:hidden"
     >
       <ellipse
         cx="0"

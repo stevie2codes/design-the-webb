@@ -145,7 +145,8 @@ export const STATE_PARAMS: Readonly<Record<StateId, StateParams>> = {
     enter: ENTER_NAME,
   },
   [StateId.NAME]: {
-    density: 0.42,
+    // §3.9 .42; tuned so the resolved name reads as bone light, not grey sand.
+    density: 0.6,
     idle: { amp: 0.003, ...IDLE_HOLD },
     aperture: 0.04,
     mouse: MouseMode.PUSH,

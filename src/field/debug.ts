@@ -182,16 +182,18 @@ export function createDebugOverlay(src: DebugSource): DebugOverlay {
       ctx.fillText(label, r[k * 4] + 3, Math.max(r[k * 4 + 1] + 3, 2));
     }
 
-    // S1 registration dots at the live S1 anchor.
+    // S1 registration dots at the live S1 anchor, at the scale the field
+    // draws S1 (≠ 1 only until an in-place resample lands, §9.8).
+    const st = src.stats();
     const n = src.name();
     if (n && n !== dotsFor) buildDots(n);
     if (n && dots) {
       anchorCenter(StateId.NAME, store, c2);
-      ctx.drawImage(dots, c2[0] + dotsX, c2[1] + dotsY, dots.width / s, dots.height / s);
+      const k = st.name?.scale ?? 1;
+      ctx.drawImage(dots, c2[0] + dotsX * k, c2[1] + dotsY * k, (dots.width / s) * k, (dots.height / s) * k);
     }
 
     // Readout.
-    const st = src.stats();
     const seg = f.seg >= 0 ? SEGMENTS[store.layout].film[f.seg] : undefined;
     let lumaMax = -1;
     let lumaAt = -1;
@@ -207,7 +209,7 @@ export function createDebugOverlay(src: DebugSource): DebugOverlay {
       `fps ${st.fps.toFixed(0)}  aperture ${f.aperture.toFixed(3)}  S ${f.stagger} T ${f.turb} path ${f.path}  opacity ${f.opacity.toFixed(2)}`,
       `printed ${f.printed.toFixed(2)}  lock ${store.flags.printedLock ? 'on' : 'off'}  intro ${st.intro ? 'running' : '-'}  cut ${f.cutting ? 'yes' : 'no'}  mode ${st.mode}`,
       `ceiling S${st.ceiling}  resident ${st.resident.map((i) => `S${i}`).join(' ')}`,
-      `S1 ${st.name ? `${st.name.source}  font ${st.name.fontReady ? 'archivo' : 'fallback'}  ${st.name.ms}ms  ${n ? n.dots.length / 2 : 0} dots` : 'pending'}`,
+      `S1 ${st.name ? `${st.name.source}  font ${st.name.fontReady ? 'archivo' : 'fallback'}  ${st.name.ms}ms  scale ${st.name.scale}  ${n ? n.dots.length / 2 : 0} dots` : 'pending'}${n ? `  (${Object.entries(n.phases).map(([k, v]) => `${k} ${v}`).join(' · ')})` : ''}`,
       `scroll ${store.scroll.y.toFixed(0)}  vel ${f.velocity.toFixed(2)}  mouse ${f.mouseAmt.toFixed(2)}  safe ${f.safe.count}`,
       `adaptive ${st.adaptive.length ? st.adaptive.join(' > ') : '-'}${st.lost ? '  CONTEXT LOST' : ''}`,
       `luma ${lumaAt >= 0 ? `max ${lumaHex[lumaAt]} (safe ${lumaAt}) ${lumaMax > LUMA_LIMIT ? 'OVER #262a34' : 'ok'}` : '-'}`,

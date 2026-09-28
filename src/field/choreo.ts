@@ -35,6 +35,8 @@ export const INTRO = { fadeIn: 0.3, unprint: 0.6, defocus: 1.4, lateFadeIn: 0.6,
 /** §9.5 print: beam 900 ms cine, then 500 ms relax to the halo; unprint 120 ms. */
 export const PRINT = { beam: DUR.scan, relax: 0.5, unprint: 0.12 } as const;
 const INTRO_KEY = 'dtw:intro';
+/** The intro clock advances at most this much per tick (ms). */
+const INTRO_MAX_STEP_MS = 50;
 
 type Timeline = ReturnType<typeof gsap.timeline>;
 
@@ -116,8 +118,15 @@ export class Choreo {
     const st = this.st;
     const tUnprint = INTRO.fadeIn * k;
     const tDefocus = tUnprint + INTRO.unprint * k;
+    // Driven by its own clamped clock (≤ 50 ms per tick), not gsap's global
+    // one (lagSmoothing is off for Lenis): a long frame — a shader compile,
+    // a busy main thread — slows the title card down instead of skipping it.
+    // The stepper is PRIORITIZED (first in the tick, like the time-based
+    // tweens of CONTRACTS.md step 3), so the engine's renderFrame draws the
+    // beam, `printed` and the override of this tick, in the same paint as
+    // the --scan written here.
     this.introTl = gsap
-      .timeline({ onComplete: () => this.endIntro(false) })
+      .timeline({ paused: true, onComplete: () => this.endIntro(false) })
       .to(this.host.canvas, { opacity: 1, duration: INTRO.fadeIn * k, ease: 'none' }, 0)
       .to(
         st,
@@ -138,6 +147,7 @@ export class Choreo {
         tUnprint,
       )
       .to(ov, { m: 0, duration: INTRO.defocus * k, ease: EASE.cine }, tDefocus);
+    gsap.ticker.add(this.stepIntro, false, true);
     return this.introPromise;
   }
 
@@ -146,7 +156,14 @@ export class Choreo {
     if (this.introTl) this.endIntro(true);
   }
 
+  private readonly stepIntro = (_time: number, deltaMs: number): void => {
+    const tl = this.introTl;
+    if (!tl) return;
+    tl.time(tl.time() + Math.min(deltaMs, INTRO_MAX_STEP_MS) / 1000);
+  };
+
   private endIntro(skipped: boolean): void {
+    gsap.ticker.remove(this.stepIntro);
     this.introTl?.kill();
     this.introTl = null;
     if (store.film.override === this.introOverride) store.film.override = null;
@@ -248,6 +265,11 @@ export class Choreo {
 
   // -------------------------------------------------------------------------
   // Modes and DOM.
+
+  /** The field is drawing (ready): print state may now follow the lock. */
+  attach(): void {
+    this.live = true;
+  }
 
   setMode(mode: 'full' | 'reduced'): void {
     const reduced = mode === 'reduced';

@@ -160,7 +160,7 @@ function CapabilityRow({ item, index, active, onActivate }: CapabilityRowProps) 
 // y = +.27s … −.27s, rotated 45° about Y then 35.264° about X. The active
 // plate is drawn solid in ember and pulled out like a drawer (+.06s up,
 // +.08s along x); the others are dotted, "out of focus". Hidden once the
-// field is live.
+// field draws S8 (`field-s8:`, html[data-field-states]).
 
 const PLATE = { w: 0.9, d: 0.6, r: 0.06 } as const;
 /** One s = 1 unit; the box is STACK_FIT units across, so the stack fits it. */
@@ -211,7 +211,7 @@ function StackOutline({ active, className = '' }: { active: number; className?: 
       focusable="false"
       viewBox={STACK_VIEWBOX}
       preserveAspectRatio="xMidYMid meet"
-      className={`pointer-events-none absolute top-(--anchor-stack-y) left-(--anchor-stack-x) h-(--anchor-stack-h) w-(--anchor-stack-w) overflow-visible field-live:hidden ${className}`}
+      className={`pointer-events-none absolute top-(--anchor-stack-y) left-(--anchor-stack-x) h-(--anchor-stack-h) w-(--anchor-stack-w) overflow-visible field-s8:hidden ${className}`}
     >
       {/* Bottom plate first, so upper plates occlude the ones beneath. */}
       {PLATE_Y.map((y, g) => ({ y, g }))

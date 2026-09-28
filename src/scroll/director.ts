@@ -221,7 +221,8 @@ let routeMix = 0;
  * Enter a route's film mode (§9.4). Each page calls it on mount (HomePage
  * with 'home', ProjectDetailPage with its emblem pair, NotFoundPage with
  * '404'):
- * - `'home'`: clears the override; the film follows scroll again (then
+ * - `'home'`: coming from another route, clears the override; the film
+ *   follows scroll again (then
  *   `snapFilm` after the home scroll restore, the §6 jump-cut resync).
  * - `'detail'`: the pair is locked to `{ a: emblem, b: nextEmblem }` (b
  *   defaults to a) at m = 0. The UI peeks / commits by tweening
@@ -237,11 +238,14 @@ export function enterRoute(
   slug = '',
   pair?: { readonly a: StateId; readonly b?: StateId },
 ): void {
+  const from = s.route.kind;
   s.route.kind = kind;
   s.route.slug = slug;
   routeMix = 0;
   if (kind === 'home') {
-    s.film.override = null;
+    // Only a route override is dropped: a home mount on the home route (first
+    // load, a layout remount) keeps the intro's override and the `?film` pin.
+    if (from !== 'home') s.film.override = null;
     return;
   }
   const a = kind === '404' ? StateId.FLATLINE : (pair?.a ?? StateId.STATIC);

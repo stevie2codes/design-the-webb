@@ -54,10 +54,11 @@ Type-level additions to §9.2 (the runtime shape is unchanged):
 | `SegmentSpec`, `SegmentTable`, `ResolvedSegments` | types |
 | `HERO_P` | `Record<LayoutMode, {p0, p1}>`, where p1 is also the lock threshold: .62 on desktop and .70 on mobile |
 | `SEGMENTS` | `Record<LayoutMode, SegmentTable>`, the §4.3 tables plus the sink range |
+| `FLOW_EDGES` | `{ from: 1, to: .4 }`: a chapter §4.1 makes sticky but measured as flow (C3 today, fit-guard fallbacks, short landscape phones) gets anchor-based edges — its anchor top moving from 100% to 40% of the viewport, the mobile rule |
 | `edgeY(edge, s)` | `→ number \| null` |
 | `resolve(s)` | `→ ResolvedSegments`. Writes `s.segments`. Call it after every refresh. Segments stay ordered and never overlap. If a chapter is missing, only the segments before it are resolved. |
 
-### `src/scroll/anchors.ts`: owner scroll; status real (route mode is TODO)
+### `src/scroll/anchors.ts`: owner scroll; status real (the MCP App detail re-stage is `TODO(phase6-scroll)`)
 
 | Symbol | Signature |
 |---|---|
@@ -67,11 +68,12 @@ Type-level additions to §9.2 (the runtime shape is unchanged):
 | `registerChapterRects(id, stageEl, s = store)` | `→ void`. **Refresh only.** Measures `[data-field-anchor]` and `[data-safe]`. |
 | `clearChapterRects(id, s = store)` | `→ void`. Call it on unmount or route change. |
 | `anchorCenter(id, s, out)` | `→ [x, y]` in viewport px. An unmeasured state falls back to its `layout.ts` box, treated as viewport-framed. |
-| `anchorTransform(id, s, out: Vec4, disperse?)` | `→ [x px, y px, scale, alpha]`. Applies the S9 sink and the S4–S7 curtain. |
+| `anchorTransform(id, s, out: Vec4, disperse?)` | `→ [x px, y px, scale, alpha]`. Applies the S9 sink and the S4–S7 curtain; in route mode, the detail-page anchor with its scroll parallax and dimming. |
+| `svhPx()` | `→ number`, 100svh in px (measured once per refresh; browser only) |
 | `createSafeRectBuffer()` | `→ SafeRectBuffer` |
 | `activeSafeRects(s, out?)` | `→ SafeRectBuffer`. The nav band, then the 5 on-screen blocks nearest the centre. In the stuck C3 stage, only the active panel's blocks count. |
 
-### `src/scroll/director.ts`: owner scroll; status real (reduced-motion posters and route-mode details are TODO)
+### `src/scroll/director.ts`: owner scroll; status real
 
 | Symbol | Signature |
 |---|---|
@@ -87,6 +89,11 @@ Type-level additions to §9.2 (the runtime shape is unchanged):
 | `createFieldFrame()` | `→ FieldFrame` |
 | `frame` | `Readonly<FieldFrame>`, the last frame produced. HUD and debug read it at ≤ 10 Hz. |
 | `tick(s, dt, now)` | `→ FieldFrame`. The engine's `renderFrame` calls it once per tick. |
+| `hudSignalAt(F)` | `→ number`: S/N at film position F without a frame (the HUD before the engine's first frame, and without WebGL) |
+| `filmTargetOf(s)` | `→ number`: the store's undamped film target (override, else scroll) |
+| `enterRoute(s, kind, slug?, pair?)` | Each page calls it on mount. `'home'`: coming from another route, clears the route override (a home mount on the home route keeps the intro's override and the `?film` pin). `'detail'`: `{ a: emblem, b?: nextEmblem }` at m = 0 (UI tweens `override.m`: .25 peek, 1 commit). `'404'`: `{ FLATLINE, FLATLINE, 0 }`, aperture .5 → .04 with the damped `fx.charge`. |
+| `posterState(s)` | `→ StateId`: reduced motion's poster — the state of the chapter that has crossed 50% of the viewport (C3 per panel) |
+| `POSTER_FADE` | .4 s, the reduced-motion crossfade |
 
 What `tick` does, by override:
 
@@ -94,6 +101,7 @@ What `tick` does, by override:
 - **Override with `b = a + 1` on the home route:** F* = a + m, as used by the intro.
 - **Override with `snap`:** no damp and no cut. Used by `?film=` and resyncs.
 - **Any other override, or a route other than home:** route mode. The frame shows (a, b) directly, with `seg = −1`.
+- **Reduced motion (`store.mode === 'reduced'`, no override):** posters. (a, b, mix) is a **crossfade**, not a morph: the engine draws A alone at α·(1 − mix), then B alone at α·mix (two passes, each state on both sides of the pair at mix 0, with its resting aperture). `seg = −1`, S = T = 0, path DEFAULT; `settled` is false only while a 400 ms fade runs, so the engine keeps rendering until it is true. There are no lock edges: the engine shows S1 printed (`fx.printed = 1`) without the beam. The poster never passes the film ceiling (until S2–S9 exist it is S1).
 
 ### `src/field/uniforms.ts`: owner engine; shared data, no `three`
 
@@ -106,14 +114,17 @@ What `tick` does, by override:
 | `PaletteStop`, `PALETTE`, `CLEAR_COLOR` | §2.1 particle ramp |
 | `IdleParams`, `StateParams`, `STATE_PARAMS` | §3.9, keyed by `StateId`: density, idle amp/freq/speed, resting aperture, mouse, and enter {S, T, path}. The stagger *key* belongs to the generator. |
 | `CAMERA_Z`, `pxToSu(x, y, W, H, out)`, `suPerPx(H)` | §3.1. W and H are the **canvas** CSS size. |
+| `FIELD_GAIN` | Global exposure (shader define): multiplies every particle's α. §3.6 fixes relative brightness only; 3 is the calibrated absolute scale. |
+| `POSTER_TIME` | Per state, the `live()` clock frozen under reduced motion (§3.10 poster frames); 0 until each generator phase sets its key frame |
+| `SCAN_OFF` | −1e4 su: `fx.scanX` when no beam runs |
 
 Adding a state takes three things: a generator in `states/sNN-*.ts`, a `live()` case in the shader, and one `STATE_PARAMS` row.
 
-### `src/field/tiers.ts`: owner engine; the table and rule are real, the probe and adaptivity runtime is TODO
+### `src/field/tiers.ts`: owner engine; status real (table, rule, warm-up probe, adaptive governor)
 
 `TierName`, `TIER_ORDER`, `TierSpec`, `TIERS` (the §3.2 counts), `BOKEH_SHARE`, `TierEnv`, `pickTier(env) → TierName`, `dprCap(tier, cores)`, `isFeebleDevice(env)`, `readTierEnv()` (browser only), `PROBE`, `ADAPTIVE`, `AdaptiveStep`.
 
-### `src/field/index.ts`: owner engine; acquire and release are real, bootField is a stub
+### `src/field/index.ts`: owner engine; status real (the Canvas2D fallback is `TODO(phase8-engine)`)
 
 | Symbol | Signature |
 |---|---|
@@ -128,6 +139,16 @@ Adding a state takes three things: a generator in `states/sNN-*.ts`, a `live()` 
 | `defaultBootOptions(mode, layout)` | `→ FieldBootOptions`, built from the QA params |
 | `bootField(canvas, opts)` | `→ Promise<FieldHandle>`. Never throws. It creates the context **on the host canvas**, so there is exactly one WebGL context, and then `import('./engine')`. |
 | `acquireField(canvas, opts)` / `releaseField()` | Ref-counted. The last release disposes after one macrotask, and a re-acquire cancels that (StrictMode-safe, §9.10). Sets `window.__field`. |
+| `getField()` | `→ FieldHandle \| null`, synchronously (code outside React: the reduced-motion scroll listener, the menu, QA) |
+| `FieldHandle.ready` | three loaded, fonts loaded, S0 + S1 built, one frame rendered (§6) |
+| `FieldHandle.intro` | `{ run(): Promise<void>, skip(), running }`: the §6 intro (it runs by itself; any wheel / touch / key / pointerdown skips it) |
+| `FieldHandle.print(on)` | Force the §9.5 print (normally automatic from `frame.lockEdge`) |
+| `FieldHandle.stats()` | `→ FieldStats \| null`: tier, texture tier, drawRange, dpr, glow, bokeh cap, fps, rendered frames, canvas and generated-for size, film ceiling, resident states, adaptive steps fired, context-loss state, S1 source / font / ms |
+| `FieldDebugHandle.ready`, `.stats()` | QA waits with `waitForFunction(() => window.__field?.ready)` |
+
+`FieldCanvas` (field/FieldCanvas.tsx) is the only mount: `#field-root` with one aria-hidden `<canvas style="opacity:0">` (identical on the server). It acquires in an idle callback (≤ 800 ms), releases on unmount, forwards the motion preference to `setMode`, subscribes `invalidate()` to every scroll write (`subscribeScroll`), samples the HUD once the field is ready, and sets `store.mode = 'css'` when no renderer starts (kind `'none'`: the CSS glow on `body::before` stays the backdrop).
+
+Engine boot details: it bootstraps `store.scroll.W / H` only if they are still 0, and sets the `?film` override only if the scroll side has not (same value). Worker jobs carry `GenerateRequest.supersede` (default true: a new job drops the queue; lazy single-state jobs pass false and queue behind it).
 
 ### `src/debugParams.ts`: shared; status real
 
@@ -149,7 +170,9 @@ Adding a state takes three things: a generator in `states/sNN-*.ts`, a `live()` 
 | `?tier=high\|mid\|low` | forces the tier; allows software GL | engine |
 | `?intro=0` | skips the intro | engine |
 
-Dev builds always expose the globals. **Headless SwiftShader needs `?tier=…` or `?debug`**, because otherwise `failIfMajorPerformanceCaveat` sends the page to the fallback.
+Dev builds always expose the globals. `?tier=…` or `?debug` create the context without `failIfMajorPerformanceCaveat`; headless Chromium here (SwiftShader, `--use-angle=swiftshader --enable-unsafe-swiftshader`) renders WebGL2 without either, but a stricter software GL may need one of them to avoid the fallback.
+
+QA scripts (gitignored `.qa/`): `shoot.mjs` (scroll positions, `--mobile --reduced --nogl`), `engine/shot.mjs` (waits for `__field.ready`; `--dpr`, `--clip`, `--scroll`), `intro.mjs` (frames at fixed times after `html[data-intro="running"]`), `interact.mjs` (nav jump cut, runtime motion toggle, rewind, detail route and back).
 
 ## Order within one gsap tick (§9.5)
 
@@ -189,3 +212,73 @@ Each tick then runs:
 4. `store.version++`, after which the engine regenerates if needed.
 
 Under reduced motion there is no Lenis. A passive `scroll` listener writes `store.scroll.y` and calls `handle.invalidate()`, and the engine renders on demand.
+
+## Scroll-side modules and components (phase 2)
+
+### `src/motion/lenis.ts`: owner scroll; status real
+
+| Symbol | Signature |
+|---|---|
+| `useSmoothScroll()` | Mount once in the App shell (`<ScrollInfra />`, first). Ref-counted, StrictMode-safe. |
+| `LENIS_OPTIONS` | §7.6 plus `respectReducedMotion: false` (the site resolves reduced motion itself; a visitor who chose Full on a reduced-motion OS still gets smooth scroll) |
+| `getLenis()`, `isSmooth()`, `scrollLimit()` | Access |
+| `glide(y, { duration?, onComplete? })` | §4.4 glide, 1.2 s expo.inOut; instant without Lenis |
+| `jumpCut(y, { onCut? })` | §4.4 jump cut: overlay in 300 ms → immediate scroll + `ScrollTrigger.update()` + `snapFilm` → overlay out 400 ms. It never tweens `fx.opacity` (the opaque z-60 overlay already covers the canvas). |
+| `rewind(opts)` | Back to top, 2.4 s with `flags.rewinding`; any wheel / touch / scroll key / pointerdown hands control back |
+| `scrollInstant(y)` | Immediate scroll that cancels a running Lenis animation (use it instead of `window.scrollTo`) |
+| `subscribeScroll(fn)` | After every `store.scroll` write and every refresh |
+| `onScrollRefresh(fn)` | After every ScrollTrigger refresh (store already updated) |
+| `onSample(fn)`, `sampleNow()` | ≤ 10 Hz sampler (ticker in full motion, scroll-driven under reduced); `sampleNow` runs every sampler once |
+| `requestRefresh()` | One coalesced `ScrollTrigger.refresh()` two frames later |
+| `registerJumpCutOverlay(el)` | JumpCutOverlay registers its element |
+| `GLIDE_S`, `FOCUS_GLIDE_S`, `JUMP_CUT_FADE` | 1.2 s, .6 s, { in .3, out .4 } |
+
+Wiring (§9.5): `gsap.ticker.add(lenisRaf, false, true)`, `lagSmoothing(0)`; the Lenis `scroll` event writes `store.scroll.y / vel` and calls `ScrollTrigger.update()`. `scroll.W / H` are measured at `refreshInit`; every refresh re-measures the footer record (the sink horizon) and the limit, runs `resolve()` and bumps `version`. Refresh points: fonts ready and every later `loadingdone`, window `load`, each home mount, motion or layout switches. It applies `?film=` at init and exposes `window.__lenis` (dev or `?debug`).
+
+### `src/motion/reveal.ts`, `src/scroll/useChapter.ts`, `src/components/Chapter.tsx`: owner scroll
+
+- `lineMask(el, opts)` and `fadeUp(els, opts)`, scrubbed or timed; both return a `Reveal` (`complete()`, `revert()`) or `null` under reduced motion.
+- `useChapter(id, sectionRef, stageRef, { onProgress, reveal })`, `ChapterContext` (`window(el, from, to)`, `track()`, `isSticky()`), `REVEAL_WINDOWS`. `<Chapter>` forwards `onProgress` and `reveal`; the fit guard requests a refresh when it flips.
+- Declarative reveals: `data-reveal="lines" | "up"`, optional `data-reveal-window="from,to"` (viewport %) and `data-reveal-timed`. Focus-in (§8.1) completes a chapter's reveals and glides to its hold (C3: the focused panel's window hold). **Never line-mask `ChapterHeading`**: SplitText's `aria: 'auto'` would put the hidden "01 — " into the accessible name.
+- Phase 2 uses reveals only where §5 C0 has them — none: the hero's eyebrow, lede and CTAs never move, and the scroll cue fades through `onProgress` (p .02 → .08). The other chapters' `data-reveal` attributes (About, NDA, Capabilities, Contact per §5) land with their choreography in phase 3.
+
+### `src/scroll/jump.ts`, `src/scroll/chapters.ts`: owner scroll
+
+`chapterTarget`, `jumpTargets`, `activeJumpIndex`, `jumpKind`, `jumpToY(y, onArrive?)`, `jumpToChapter(id)` (§4.4 policy: ≤ 2 film states glide, else cut; the policy compares the film positions derived from the current and target scroll, not the displayed F), `focusQuietly`, `isQuietFocus`, `focusChapterHeading`, `JUMP_ORDER`, `GLIDE_MAX_STATES`, `onJumpLinkClick`. `chapters.ts` adds `CHAPTER_STATE` (each chapter's reduced-motion poster) and `PROJECT_HOLD_Q` (.56).
+
+The App's `ScrollToHash` routes every route-change scroll through these: no hash → `scrollInstant(0)` (not on POP); a jump id → `jumpToChapter`; any other hash → `jumpToY(top, () => focusQuietly(heading))`.
+
+### UI ownership
+
+- **Nav** owns `flags.menuOpen` and the menu's `fx.opacity`: opening fades `fx.opacity` to .3 over 400 ms, then sets `menuOpen` (the engine stops its loop 450 ms later); closing clears it immediately. Nav publishes `html[data-active-chapter]`.
+- **HUD, Rail, Nav, CursorRing** run on the ≤ 10 Hz sampler / the ticker and write through refs. Until the engine's first frame (`frame.now > 0`) the HUD derives S/N from the scroll-driven film target; under reduced motion it does not damp.
+- **Pages** call `enterRoute` on mount (HomePage `'home'`; ProjectDetailPage its emblem pair or `{ a: STATIC }`; NotFoundPage `'404'`, whose CTA hover / focus sets `fx.charge` 1 / 0).
+- **App shell order** (§9.1): `ScrollInfra`, SkipLink, `FieldCanvas`, Atmosphere, Nav, Rail, Hud, ScrollToHash, `<main>`, Footer, `JumpCutOverlay`, `CursorRing`.
+
+### `html` attributes set at runtime
+
+| Attribute | Set by | Meaning |
+|---|---|---|
+| `data-field="live"` | engine | The WebGL field is drawing (scrims on, `field-live:`) |
+| `data-field-states="0 1 …"` | engine | Resident state ids. The `field-s2:` … `field-s9:` and `no-field-s10:` variants hide each DOM stand-in (chart SVG bars, NDA slabs, emblem outlines, stack plates, beacon shell, the 404 hairline, the ROWS counter's visibility) only once **its own** state draws, so a state whose generator has not landed never leaves a hole. |
+| `data-tier` | engine | Drawn tier (animated grain on High) |
+| `data-intro="running"` | engine | The §6 intro runs; the `intro:` variant hides the scroll cue until it ends |
+| `data-active-chapter` | Nav | For CSS hooks |
+
+## Tuning notes (phase 2 visual QA)
+
+Tuned on headless SwiftShader screenshots at 1440×900 (DPR 1 and 2, High and Mid) and 390×844 (Low), judged for the hero's cold open, rack focus, lock and halo. Everything else follows §3. Where a value departs from the spec, the spec number is noted in the source next to it.
+
+| Where | Value | Spec | Why |
+|---|---|---|---|
+| `uniforms.ts` `FIELD_GAIN` | 3 | — (absolute scale unspecified) | Engine phase: §3.6 literally leaves S0 invisible and S1 very dim |
+| shader α falloff (`BOKEH_FALLOFF`) | `α / grow^1.3`, grow = drawn / base size | `α / dof^1.6` | Light is conserved once the cap binds (engine phase: growth actually drawn); 1.3 instead of 1.6 so the lens discs read as soft light, not a dark haze |
+| shader bokeh cap spread (`BOKEH_SPREAD`) | eligible points cap at `uBokehCap × mix(.5, 1.5, aSeed.w / .35)` (mean = the tier cap) | one cap per tier | Discs of many sizes instead of one: the defocused volume gains depth. Adaptive downgrade still lowers `uBokehCap` first. |
+| frag lens disc | plateau .42 + rim ring .5 (d .6 → 1) + centre .3 | plateau .55 + centre .45 ("faint rim") | Real-lens "soap bubble" rims make overlapping discs read as bokeh |
+| `s00-static.ts` `BOX_SHARE` | .5 box / .5 clumps | .64 / .36 | More nebula structure |
+| `s00-static.ts` `BOX_DIM` | box particles at .6 × α | — | Clumps glow in a darker volume: depth and composition instead of an even carpet of grain |
+| `s00-static.ts` `SPARK_ALPHA` | `.2 + .7·r⁴` | .9 flat | Sparse embers: most smoulder, a few flare |
+| `uniforms.ts` S1 density | .6 | .42 | The resolved particle name reads as bone light, not grey sand |
+| `live.glsl` `NAME_GRAIN_SIZE` | glyph grains × 1.45 | 1.5px pinpoints | Same reason; still pinpoints |
+| `live.glsl` printed halo | fill α → 0; edge grains become soft Gaussian sprites (`vSoft`) at size × 4.2 (× 3.0 on Low), α × .085, ramp + .08 (toward ember); band and hairline keep α ×.45 / size ×1.5 | α ×.45, size ×1.5 for all | The crisp DOM type covers every particle inside the glyphs, so the spec's halo never showed. Edge sprites bloom past the glyph edges: the printed name glows warmly, and the interior fill costs no fill rate. |
+| `choreo.ts` intro clock | its own clock, ≤ 50 ms per tick | gsap global time | `lagSmoothing(0)` (for Lenis) let one long frame (a shader compile, a busy main thread) skip the whole 2.3 s title card; now it slows down instead. The engine also renders its first frame (compiling the programs) before starting the intro. |

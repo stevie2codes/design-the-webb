@@ -1,8 +1,10 @@
 /**
  * useChapter (SPEC §9.3, §9.6, §8.1): one home chapter → the store.
  *
- * Inside `useGSAP({ scope, dependencies: [reducedMotion, layout],
- * revertOnUpdate })`:
+ * Once the scroll runtime has loaded (motion/lazy.ts: gsap and ScrollTrigger
+ * are off the hydration path, §8.5), inside one `gsap.context` scoped to the
+ * section and rebuilt when reduced motion or the layout changes (the §9.10
+ * useGSAP rule — `@gsap/react` would pull gsap into the initial bundle):
  * - one ScrollTrigger over the section — sticky: `top top` → `bottom bottom`
  *   (progress over L); flow: `top bottom` → `bottom top`. Sticky-ness is the
  *   stage's computed position at refresh time, so a fit-guard fallback
@@ -14,7 +16,9 @@
  * - `onUpdate` / `onToggle` write `progress` / `active` (no layout reads);
  * - the chapter's reveals: declarative `[data-reveal]` elements (below) and
  *   the `reveal(ctx)` callback. They complete during the transit-in (hold
- *   rule) and are all reverted with the context.
+ *   rule) and are all reverted with the context. The reveal helpers
+ *   (SplitText) are a further lazy chunk, loaded only by a chapter that has
+ *   `[data-reveal]` elements or a `reveal` callback.
  *
  * Declarative reveals (full motion only; no-ops under reduced motion):
  * - `data-reveal="lines"`: line mask (§5), scrubbed while the section top
@@ -39,15 +43,19 @@
 import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react';
 import type { LayoutMode } from '../field/layout';
 import { FOCUS_GLIDE_S, glide, requestRefresh } from '../motion/lenis';
-import { ScrollTrigger, useGSAP } from '../motion/gsap';
+import { loadReveal, loadScroll, reportLoadError, type RevealModule, type ScrollRuntime } from '../motion/lazy';
 import { useReducedMotion } from '../motion/motionPref';
-import { fadeUp, lineMask, type Reveal, type RevealWindow } from '../motion/reveal';
+import type { Reveal, RevealWindow } from '../motion/reveal';
 import { useLayoutMode } from '../motion/useLayoutMode';
 import { clearChapterRects, isStageSticky, registerChapterRects, svhPx } from './anchors';
 import { JUMP_OFFSET_VH, PROJECT_HOLD_Q, PROJECT_WINDOW_VH, type HomeChapterId } from './chapters';
 import { isQuietFocus } from './jump';
 import { resolve } from './segments';
 import { store } from './store';
+
+type Gsap = ScrollRuntime['gsap'];
+type ScrollTriggerStatic = ScrollRuntime['ScrollTrigger'];
+type ScrollTriggerInstance = InstanceType<ScrollTriggerStatic>;
 
 /** What a chapter's `reveal` callback receives. */
 export interface ChapterContext {
@@ -56,6 +64,12 @@ export interface ChapterContext {
   readonly stage: HTMLElement;
   readonly reduced: boolean;
   readonly layout: LayoutMode;
+  /** gsap and ScrollTrigger (lazy-loaded; never import them statically from a chapter). */
+  readonly gsap: Gsap;
+  readonly ScrollTrigger: ScrollTriggerStatic;
+  /** The reveal helpers (motion/reveal.ts, lazy-loaded with SplitText). */
+  readonly lineMask: RevealModule['lineMask'];
+  readonly fadeUp: RevealModule['fadeUp'];
   /** Whether the stage is sticky right now (computed style: call at build / refresh time only). */
   isSticky(): boolean;
   /**
@@ -70,7 +84,7 @@ export interface ChapterContext {
 
 export interface UseChapterOptions {
   /** Sticky progress p (or flow progress) on every ScrollTrigger update. Write refs / store, never React state. */
-  onProgress?: (p: number, self: ScrollTrigger) => void;
+  onProgress?: (p: number, self: ScrollTriggerInstance) => void;
   /**
    * Build the chapter's scroll choreography (reveals, scrubs) inside its
    * gsap context. May return a cleanup; everything gsap created is reverted
@@ -94,6 +108,7 @@ function parseWindow(raw: string | undefined, fallback: readonly [number, number
 
 /** `[data-reveal]` → line masks and grouped fade-ups (see the file header). */
 function autoReveals(ctx: ChapterContext): void {
+  const { lineMask, fadeUp } = ctx;
   const groups = new Map<string, { from: number; to: number; timed: boolean; els: HTMLElement[] }>();
   for (const el of ctx.section.querySelectorAll<HTMLElement>('[data-reveal]')) {
     const kind = el.dataset.reveal;
@@ -140,15 +155,22 @@ export function useChapter(
     optsRef.current = opts;
   });
 
-  useGSAP(
-    () => {
-      const section = sectionRef.current;
-      const stage = stageRef.current;
-      if (!section || !stage) return;
+  useEffect(() => {
+    const section = sectionRef.current;
+    const stage = stageRef.current;
+    if (!section || !stage) return;
+    let alive = true;
+    let teardown: (() => void) | null = null;
+    const wantsReveals = !reduced && (!!optsRef.current.reveal || section.querySelector('[data-reveal]') !== null);
+
+    const build = (rt: ScrollRuntime, rv: RevealModule | null): void => {
+      if (!alive) return;
+      const { gsap, ScrollTrigger } = rt;
       const reveals: Reveal[] = [];
       revealsRef.current = reveals;
+      let cleanup: void | (() => void);
 
-      const record = (self: ScrollTrigger): void => {
+      const record = (self: ScrollTriggerInstance): void => {
         const r = section.getBoundingClientRect();
         const sticky = isStageSticky(stage);
         const H = store.scroll.H || svhPx();
@@ -165,45 +187,53 @@ export function useChapter(
         store.version++;
       };
 
-      ScrollTrigger.create({
-        trigger: section,
-        start: () => (isStageSticky(stage) ? 'top top' : 'top bottom'),
-        end: () => (isStageSticky(stage) ? 'bottom bottom' : 'bottom top'),
-        onRefresh: record,
-        onUpdate: (self) => {
-          const rec = store.chapters[id];
-          if (rec) rec.progress = self.progress;
-          optsRef.current.onProgress?.(self.progress, self);
-        },
-        onToggle: (self) => {
-          const rec = store.chapters[id];
-          if (rec) rec.active = self.isActive;
-        },
-      });
+      const gctx = gsap.context(() => {
+        ScrollTrigger.create({
+          trigger: section,
+          start: () => (isStageSticky(stage) ? 'top top' : 'top bottom'),
+          end: () => (isStageSticky(stage) ? 'bottom bottom' : 'bottom top'),
+          onRefresh: record,
+          onUpdate: (self) => {
+            const rec = store.chapters[id];
+            if (rec) rec.progress = self.progress;
+            optsRef.current.onProgress?.(self.progress, self);
+          },
+          onToggle: (self) => {
+            const rec = store.chapters[id];
+            if (rec) rec.active = self.isActive;
+          },
+        });
 
-      const ctx: ChapterContext = {
-        id,
-        section,
-        stage,
-        reduced,
-        layout,
-        isSticky: () => isStageSticky(stage),
-        window: (el, from, to) => ({
-          trigger: el,
-          start: () => (isStageSticky(stage) ? docTop(section) - (from / 100) * viewportH() : FLOW_WINDOW[0]),
-          end: () => (isStageSticky(stage) ? docTop(section) - (to / 100) * viewportH() : FLOW_WINDOW[1]),
-        }),
-        track: (r) => {
-          if (r) reveals.push(r);
-          return r;
-        },
-      };
-      autoReveals(ctx);
-      const cleanup = optsRef.current.reveal?.(ctx);
+        const noReveal = (): null => null;
+        const ctx: ChapterContext = {
+          id,
+          section,
+          stage,
+          reduced,
+          layout,
+          gsap,
+          ScrollTrigger,
+          lineMask: rv ? rv.lineMask : noReveal,
+          fadeUp: rv ? rv.fadeUp : noReveal,
+          isSticky: () => isStageSticky(stage),
+          window: (el, from, to) => ({
+            trigger: el,
+            start: () => (isStageSticky(stage) ? docTop(section) - (from / 100) * viewportH() : FLOW_WINDOW[0]),
+            end: () => (isStageSticky(stage) ? docTop(section) - (to / 100) * viewportH() : FLOW_WINDOW[1]),
+          }),
+          track: (r) => {
+            if (r) reveals.push(r);
+            return r;
+          },
+        };
+        if (rv) autoReveals(ctx);
+        cleanup = optsRef.current.reveal?.(ctx);
+      }, section);
       requestRefresh();
 
-      return () => {
+      teardown = () => {
         if (typeof cleanup === 'function') cleanup();
+        gctx.revert();
         reveals.length = 0;
         clearChapterRects(id);
         delete store.chapters[id];
@@ -211,9 +241,21 @@ export function useChapter(
         store.version++;
         requestRefresh();
       };
-    },
-    { scope: sectionRef, dependencies: [reduced, layout], revertOnUpdate: true },
-  );
+    };
+
+    const scroll = loadScroll();
+    if (wantsReveals) {
+      Promise.all([scroll, loadReveal()]).then(([rt, rv]) => build(rt, rv), reportLoadError);
+    } else {
+      scroll.then((rt) => build(rt, null), reportLoadError);
+    }
+
+    return () => {
+      alive = false;
+      teardown?.();
+      teardown = null;
+    };
+  }, [id, reduced, layout, sectionRef, stageRef]);
 
   // Focus-in (§8.1): complete the reveals, scroll to the hold.
   useEffect(() => {

@@ -143,12 +143,31 @@ export function readTierEnv(): TierEnv {
   };
 }
 
-/** Warm-up probe during the intro (§3.2): High drops to Mid by drawRange only. */
+/**
+ * Warm-up probe during the intro (§3.2): High drops to Mid by drawRange only.
+ *
+ * §3.2 says "p75 of the rAF deltas over 14 ms", but a rAF delta is never
+ * shorter than the display's refresh interval: at 60 Hz every frame is
+ * 16.7 ms however light the load, so the literal rule demoted every 60 Hz
+ * desktop. The probe judges DROPPED frames against the display instead
+ * (CONTRACTS.md tuning notes): the refresh interval is estimated as the
+ * fast end of the window (its 10th percentile), and the verdict is slow when
+ * more than a quarter of the frames took over 1.5 intervals (i.e. the p75
+ * exceeds 1.5 intervals), or when even the fast end is slower than a 48 Hz
+ * frame (a steady 30 fps render on a 60 Hz panel never drops a vsync, so
+ * the interval estimate itself is too long).
+ */
 export const PROBE = {
   /** Frames sampled (≈ the intro). */
   frames: 45,
-  /** p75 rAF delta above this on High → Mid. */
-  p75Ms: 14,
+  /** Refresh-interval estimate: this percentile of the window's deltas. */
+  intervalPct: 0.1,
+  /** A delta above interval × this is a dropped frame. */
+  dropFactor: 1.5,
+  /** Slow when more than this share of the frames dropped. */
+  dropShare: 0.25,
+  /** Slow when the interval estimate itself exceeds this (sub-48 fps steady). */
+  maxIntervalMs: 1000 / 48,
 } as const;
 
 /** Adaptive downgrade (§3.2): one step per firing, never back up in a session. */
@@ -169,8 +188,23 @@ export type AdaptiveStep = (typeof ADAPTIVE.steps)[number];
 const STALL_MS = 250;
 
 /**
- * Warm-up probe (§3.2): the p75 of the first PROBE.frames rAF deltas. Feed it
- * the engine's tick deltas; it answers once.
+ * The warm-up verdict for a window of rAF deltas (ms), relative to the
+ * display's refresh interval (see PROBE). Pure.
+ */
+export function probeVerdict(deltas: readonly number[]): 'slow' | 'ok' {
+  if (deltas.length === 0) return 'ok';
+  const s = [...deltas].sort((a, b) => a - b);
+  const interval = s[Math.min(s.length - 1, Math.floor(s.length * PROBE.intervalPct))];
+  if (interval > PROBE.maxIntervalMs) return 'slow';
+  const limit = interval * PROBE.dropFactor;
+  let dropped = 0;
+  for (const d of s) if (d > limit) dropped++;
+  return dropped / s.length > PROBE.dropShare ? 'slow' : 'ok';
+}
+
+/**
+ * Warm-up probe (§3.2): the first PROBE.frames rAF deltas, judged by
+ * probeVerdict(). Feed it the engine's tick deltas; it answers once.
  */
 export class WarmupProbe {
   private readonly samples: number[] = [];
@@ -180,19 +214,14 @@ export class WarmupProbe {
     return this.done;
   }
 
-  /** 'slow' (p75 above PROBE.p75Ms) or 'ok' once enough frames are in; null before and after. */
+  /** 'slow' or 'ok' once enough frames are in; null before and after. */
   push(ms: number): 'slow' | 'ok' | null {
     if (this.done || !(ms > 0) || ms > STALL_MS) return null;
     this.samples.push(ms);
     if (this.samples.length < PROBE.frames) return null;
     this.done = true;
-    return p75(this.samples) > PROBE.p75Ms ? 'slow' : 'ok';
+    return probeVerdict(this.samples);
   }
-}
-
-function p75(values: readonly number[]): number {
-  const s = [...values].sort((a, b) => a - b);
-  return s[Math.min(s.length - 1, Math.floor(s.length * 0.75))];
 }
 
 /**

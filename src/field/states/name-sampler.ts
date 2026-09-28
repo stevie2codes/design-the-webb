@@ -109,6 +109,9 @@ interface Frame {
   /** Anchor centre, viewport CSS px. */
   readonly acx: number;
   readonly acy: number;
+  /** Anchor box size, CSS px (the engine compares it with the refreshed anchor, §9.8). */
+  readonly aw: number;
+  readonly ah: number;
   readonly font: string;
   readonly stretch: string;
   readonly size: number;
@@ -186,6 +189,8 @@ function measureDom(h1: HTMLElement, anchorEl: HTMLElement | null): Frame | null
     height: rect.height,
     acx: hasAnchor ? a.left + a.width / 2 : rect.left + rect.width / 2,
     acy: hasAnchor ? a.top + a.height / 2 : rect.top + rect.height / 2,
+    aw: hasAnchor ? a.width : rect.width,
+    ah: hasAnchor ? a.height : rect.height,
     font: `${cs.fontStyle} ${cs.fontWeight} ${stretch} SIZEpx ${cs.fontFamily}`,
     stretch,
     size,
@@ -217,6 +222,8 @@ function layoutFrame(view: GenViewport, mode: LayoutMode): Frame {
     height: b.h + 0.2 * size,
     acx: b.cx,
     acy: b.cy,
+    aw: b.w,
+    ah: b.h,
     font: `normal 800 condensed SIZEpx ${FALLBACK_FAMILY}`,
     stretch: 'condensed',
     size,
@@ -234,6 +241,13 @@ export interface NameSample {
   readonly source: 'dom' | 'layout';
   /** The Archivo face was available when sampling (else: fallback stack). */
   readonly fontReady: boolean;
+  /**
+   * The S1 anchor box (CSS px) at sampling time. The sample is registered to
+   * it: when the refreshed anchor differs (the name rescaled with --name-fs),
+   * the engine scales S1 by the width ratio and resamples in place.
+   */
+  readonly anchorW: number;
+  readonly anchorH: number;
   /** The h1 box in local su (relative to the anchor centre): the beam's run. */
   readonly bounds: { readonly x0: number; readonly x1: number; readonly y0: number; readonly y1: number };
   /** Debug: glyph sample points, CSS px relative to the anchor centre (x, y pairs). */
@@ -443,6 +457,8 @@ export function sampleName(input: NameSampleInput): NameSample {
     meta: packed.meta,
     source: dom ? 'dom' : 'layout',
     fontReady: isNameFontReady(),
+    anchorW: f.aw,
+    anchorH: f.ah,
     bounds: { x0: toSuX(f.left), x1: toSuX(f.left + f.width), y0: toSuY(f.top + f.height), y1: toSuY(f.top) },
     dots: dots.subarray(0, nDots),
     boxes,

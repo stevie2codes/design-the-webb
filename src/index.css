@@ -40,6 +40,8 @@
      js:        JS is running          nojs:      JS is off
      live:      JS and full motion     rm:        reduced motion
      field-live / no-field:  the WebGL field is (not) drawing
+     field-s2 … field-s9, no-field-s10:  the field is (not) drawing state k
+     intro:     the §6 intro is expected (pre-paint guess) or running
      staged:    inside a chapter whose stage is actually sticky right now
                 (desktop sticky chapters; hero/contact on mobile; hero only on
                 short landscape) — use it for stacked/absolute stage layouts
@@ -51,6 +53,23 @@
 @custom-variant rm (&:where(.rm, .rm *));
 @custom-variant field-live (&:where([data-field="live"], [data-field="live"] *));
 @custom-variant no-field (&:where(html:not([data-field="live"]), html:not([data-field="live"]) *));
+/* Per state: the live field is drawing state k (the engine lists the resident
+   ids in html[data-field-states]). DOM stand-ins for a state — the chart's
+   SVG bars, the NDA slabs, emblem outlines, the stack plates, the beacon
+   shell, the 404 flatline — hide only once THEIR state draws, so a state
+   whose generator has not landed yet never leaves a hole. */
+@custom-variant field-s2 (&:where([data-field="live"][data-field-states~="2"], [data-field="live"][data-field-states~="2"] *));
+@custom-variant field-s3 (&:where([data-field="live"][data-field-states~="3"], [data-field="live"][data-field-states~="3"] *));
+@custom-variant field-s4 (&:where([data-field="live"][data-field-states~="4"], [data-field="live"][data-field-states~="4"] *));
+@custom-variant field-s5 (&:where([data-field="live"][data-field-states~="5"], [data-field="live"][data-field-states~="5"] *));
+@custom-variant field-s6 (&:where([data-field="live"][data-field-states~="6"], [data-field="live"][data-field-states~="6"] *));
+@custom-variant field-s7 (&:where([data-field="live"][data-field-states~="7"], [data-field="live"][data-field-states~="7"] *));
+@custom-variant field-s8 (&:where([data-field="live"][data-field-states~="8"], [data-field="live"][data-field-states~="8"] *));
+@custom-variant field-s9 (&:where([data-field="live"][data-field-states~="9"], [data-field="live"][data-field-states~="9"] *));
+@custom-variant no-field-s10 (&:where(html:not([data-field="live"][data-field-states~="10"]), html:not([data-field="live"][data-field-states~="10"]) *));
+/* The §6 intro is expected or running: html[data-intro="pending"] (the
+   pre-paint script's guess, until the engine decides) or "running" (engine). */
+@custom-variant intro (&:where([data-intro], [data-intro] *));
 @custom-variant staged {
   @media (min-width: 1024px) and (min-height: 500px), (min-width: 768px) and (orientation: landscape) and (min-height: 500px) {
     &:where(html.js:not(.rm) .chapter[data-sticky]:not([data-overflow]) *) {
@@ -495,6 +514,13 @@
     mask-image: linear-gradient(90deg, #000 var(--scan, 100%), transparent calc(var(--scan, 100%) + 2%));
   }
 
+  /* §6 intro failsafe: html[data-intro="pending"] (the pre-paint guess)
+     holds the scroll cue until the engine starts the intro or drops the
+     guess; if neither happens within 4 s, the cue fades in anyway. */
+  html[data-intro="pending"] [data-scroll-cue] > * {
+    animation: intro-failsafe 700ms var(--ease-ui) 4s both;
+  }
+
   /* ── Chapters and stages (§4.1, §4.2, §9.11) ─────────────────────────────
      <Chapter> renders <section class="chapter" data-sticky…> > <div class="stage">
      with --chapter-l / --chapter-l-mobile. Sticky only under html.js:not(.rm);
@@ -602,9 +628,14 @@
   }
 
   /* ── Text-safe scrim (§2.3) ────────────────────────────────────────────────
-     Every text block over the field carries [data-safe]: a void scrim 48px
+     Every text block over the field carries [data-safe]: a void scrim 64px
      beyond the block, feathered on all four edges. The field also dims
      particles inside these rects (text-safe mask). .scrim is an alias.
+     - The feather is an eased (smootherstep) ramp over 64px, not §2.3's
+       linear 48px: a linear ramp starts and stops abruptly, and together
+       with the shader mask's ramp it read as a dark box cut into the field.
+       The fully opaque core still starts at the block's edge
+       (CONTRACTS.md tuning notes).
      - No `isolation`: every ::before (z −1) drops into the stacking context
        of <main> (relative z-2), so all scrims paint beneath all text and
        above the canvas; a later block's scrim can never dim earlier text.
@@ -619,20 +650,28 @@
   }
   [data-safe]::before,
   .scrim::before {
+    /* smootherstep(t) at t = 0, 1/8 … 1, over 64px from each edge */
+    --scrim-in:
+      transparent, rgb(0 0 0 / 0.011) 8px, rgb(0 0 0 / 0.104) 16px, rgb(0 0 0 / 0.262) 24px,
+      rgb(0 0 0 / 0.5) 32px, rgb(0 0 0 / 0.738) 40px, rgb(0 0 0 / 0.896) 48px, rgb(0 0 0 / 0.989) 56px, #000 64px;
+    --scrim-out:
+      #000 calc(100% - 64px), rgb(0 0 0 / 0.989) calc(100% - 56px), rgb(0 0 0 / 0.896) calc(100% - 48px),
+      rgb(0 0 0 / 0.738) calc(100% - 40px), rgb(0 0 0 / 0.5) calc(100% - 32px), rgb(0 0 0 / 0.262) calc(100% - 24px),
+      rgb(0 0 0 / 0.104) calc(100% - 16px), rgb(0 0 0 / 0.011) calc(100% - 8px), transparent;
     content: "";
     position: absolute;
-    inset: -48px max(-48px, calc(-1 * var(--gutter)));
+    inset: -64px max(-64px, calc(-1 * var(--gutter)));
     z-index: -1;
     pointer-events: none;
     background-color: rgb(5 5 7 / 0.82);
     transition: opacity 300ms var(--ease-ui);
     -webkit-mask-image:
-      linear-gradient(to right, transparent, #000 48px, #000 calc(100% - 48px), transparent),
-      linear-gradient(to bottom, transparent, #000 48px, #000 calc(100% - 48px), transparent);
+      linear-gradient(to right, var(--scrim-in), var(--scrim-out)),
+      linear-gradient(to bottom, var(--scrim-in), var(--scrim-out));
     -webkit-mask-composite: source-in;
     mask-image:
-      linear-gradient(to right, transparent, #000 48px, #000 calc(100% - 48px), transparent),
-      linear-gradient(to bottom, transparent, #000 48px, #000 calc(100% - 48px), transparent);
+      linear-gradient(to right, var(--scrim-in), var(--scrim-out)),
+      linear-gradient(to bottom, var(--scrim-in), var(--scrim-out));
     mask-composite: intersect;
   }
   html:not([data-field]) [data-safe]::before,
@@ -809,6 +848,33 @@
     opacity: 0.045;
     will-change: transform;
     animation: grain-shift 0.5s steps(6) infinite; /* 12 fps */
+  }
+
+  /* ── Forced colors (Windows High Contrast…) ──────────────────────────────
+     The system palette owns every colour: the name is never masked (the
+     field that would stand in for it is not drawn — FieldCanvas does not
+     boot it), and the decorative layers go, including the scrims, which
+     would otherwise be recoloured into bright slabs. */
+  @media (forced-colors: active) {
+    .scan-print {
+      -webkit-mask-image: none;
+      mask-image: none;
+    }
+    .field-root,
+    .atmo,
+    [data-safe]::before,
+    .scrim::before {
+      display: none;
+    }
+  }
+}
+
+@keyframes intro-failsafe {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 
