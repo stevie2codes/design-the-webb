@@ -346,38 +346,46 @@ export function sampleName(input: NameSampleInput): NameSample {
     // stratum [s, s + 1)·step of the cumulative weight (scan order). Evenly
     // spread like systematic sampling, without its row-aligned moiré.
     if (total > 0) {
+      // Inlined TargetList.push (33k points): meta bytes are constants per
+      // class except the param (normX) and the group (line).
       const step = total / nGlyph;
+      const P = shape.pos;
+      const Mt = shape.meta;
+      const rampB = Math.round(RAMP.signal * 255);
+      const alphaB = [0, Math.round(0.6 * 255), 255];
+      const roleB = [0, Role.FILL << 4, Role.EDGE << 4];
+      const invW = 1 / Math.max(1, f.width);
       let stratum = 0;
       let next = rand() * step;
       let acc = 0;
-      for (let i = 0; i < n && shape.count < nGlyph; i++) {
+      let m = 0;
+      for (let i = 0; i < n && m < nGlyph; i++) {
         const c = cls[i];
         if (!c) continue;
         acc += c;
         if (next >= acc) continue;
         const x = i % cw;
         const y = (i - x) / cw;
-        while (next < acc && shape.count < nGlyph) {
+        while (next < acc && m < nGlyph) {
           next = (++stratum + rand()) * step;
           const cssX = ox + (x + 0.5 + (rand() * 2 - 1) * 0.4) / k;
           const cssY = oy + (y + 0.5 + (rand() * 2 - 1) * 0.4) / k;
-          const nx = normX(cssX);
-          const edge = c === 2;
-          shape.push(
-            toSuX(cssX),
-            toSuY(cssY),
-            (rand() * 2 - 1) * 0.015,
-            0.15 + 0.6 * nx + 0.25 * rand(),
-            RAMP.signal,
-            edge ? 1 : 0.6,
-            nx,
-            edge ? Role.EDGE : Role.FILL,
-            lineOf(cssY),
-          );
+          const nx = Math.min(1, Math.max(0, (cssX - f.left) * invW));
+          const o = m * 4;
+          P[o] = (cssX - f.acx) * suK;
+          P[o + 1] = -(cssY - f.acy) * suK;
+          P[o + 2] = (rand() * 2 - 1) * 0.015;
+          P[o + 3] = Math.min(1, 0.15 + 0.6 * nx + 0.25 * rand());
+          Mt[o] = rampB;
+          Mt[o + 1] = alphaB[c];
+          Mt[o + 2] = Math.round(nx * 255);
+          Mt[o + 3] = roleB[c] | lineOf(cssY);
           dots[nDots++] = cssX - f.acx;
           dots[nDots++] = cssY - f.acy;
+          m++;
         }
       }
+      shape.count = m;
     }
   }
 
