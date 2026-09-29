@@ -17,6 +17,9 @@
  *    are baked in and registration holds at any scroll position.
  * 18% atmospheric band; sparks draw an ember hairline .14em under the last
  * baseline, across the name. Sort: 64 column bins then y (shared with S0 / S2).
+ * The name reads as a career timeline (layout.ts NAME_TIMELINE): glyph grains
+ * in the developer years are steel (group dev), the rest signal (group
+ * design), and on the one-line name yearly ember ticks hang from the hairline.
  *
  * Without a hero <h1> (another route at boot) it falls back to the layout.ts
  * cap box and a whole-line draw; the engine resamples once the hero mounts.
@@ -34,7 +37,7 @@ import {
   type GenViewport,
   type IndexLayout,
 } from './common.ts';
-import { NAME_METRICS, resolveAnchor, type LayoutMode } from '../layout.ts';
+import { NAME_METRICS, NAME_TIMELINE, resolveAnchor, type LayoutMode } from '../layout.ts';
 import { Role } from '../uniforms.ts';
 
 /** The font the DOM name uses (§2.5, §9.8 step 1). */
@@ -43,8 +46,15 @@ const FALLBACK_FAMILY = '"Archivo Variable", ui-sans-serif, system-ui, sans-seri
 
 /** Shares of M (§3.10 S1). */
 const GLYPH_SHARE = 0.82;
+/** The name is a career timeline (layout.ts NAME_TIMELINE): colour, group and ticks. */
+const { years: CAREER_YEARS, devYears: DEV_YEARS, groups: NAME_GROUP } = NAME_TIMELINE;
+/** Share of the sparks that draw the yearly ticks on the hairline (single-line name only). */
+const TICK_SHARE = 0.16;
+/** Tick depth below the hairline, in em (the dev → design boundary is longer). */
+const TICK_EM = 0.05;
+const TICK_EM_SPLIT = 0.09;
 /** Spark hairline offset below the baseline, in em. */
-const HAIRLINE_EM = 0.14;
+const HAIRLINE_EM = NAME_TIMELINE.hairlineEm;
 /** Canvas resolution: h1 rect × 2, capped at 2048px wide. */
 const RASTER_SCALE = 2;
 const RASTER_MAX_W = 2048;
@@ -301,6 +311,20 @@ export function sampleName(input: NameSampleInput): NameSample {
     while (i < lineSplits.length && y > lineSplits[i]) i++;
     return i;
   };
+  // Career timeline t ∈ [0, 1] in reading order (the lines laid end to end).
+  const lineX0 = f.lines.map((l) => l.x0);
+  const lineOff: number[] = [];
+  let lineSum = 0;
+  for (const l of f.lines) {
+    lineOff.push(lineSum);
+    lineSum += Math.max(0, l.x1 - l.x0);
+  }
+  const devSplit = DEV_YEARS / CAREER_YEARS;
+  const timeOf = (x: number, y: number): number => {
+    if (!(lineSum > 0)) return normX(x);
+    const li = Math.min(lineOf(y), f.lines.length - 1);
+    return Math.min(1, Math.max(0, (lineOff[li] + x - lineX0[li]) / lineSum));
+  };
 
   // 3. Raster.
   const pad = 0.25 * f.size;
@@ -371,7 +395,8 @@ export function sampleName(input: NameSampleInput): NameSample {
       const step = total / nGlyph;
       const P = shape.pos;
       const Mt = shape.meta;
-      const rampB = Math.round(RAMP.signal * 255);
+      const rampDev = Math.round(RAMP.steel * 255);
+      const rampDesign = Math.round(RAMP.signal * 255);
       const alphaB = [0, Math.round(0.6 * 255), 255];
       const roleB = [0, Role.FILL << 4, Role.EDGE << 4];
       const invW = 1 / Math.max(1, f.width);
@@ -396,10 +421,11 @@ export function sampleName(input: NameSampleInput): NameSample {
           P[o + 1] = -(cssY - f.acy) * suK;
           P[o + 2] = (rand() * 2 - 1) * 0.015;
           P[o + 3] = Math.min(1, 0.15 + 0.6 * nx + 0.25 * rand());
-          Mt[o] = rampB;
+          const dev = timeOf(cssX, cssY) < devSplit;
+          Mt[o] = dev ? rampDev : rampDesign;
           Mt[o + 1] = alphaB[c];
           Mt[o + 2] = Math.round(nx * 255);
-          Mt[o + 3] = roleB[c] | lineOf(cssY);
+          Mt[o + 3] = roleB[c] | (dev ? NAME_GROUP.dev : NAME_GROUP.design);
           dots[nDots++] = cssX - f.acx;
           dots[nDots++] = cssY - f.acy;
           m++;
@@ -421,7 +447,7 @@ export function sampleName(input: NameSampleInput): NameSample {
     const cssX = cxBand + (rand() - 0.5) * 1.15 * f.width;
     const cssY = cyBand + (rand() * 2 - 1) * halfBand;
     const nx = normX(cssX);
-    shape.push(toSuX(cssX), toSuY(cssY), -0.6 + rand() * 0.8, 0.15 + 0.6 * nx + 0.25 * rand(), RAMP.steel, 0.1, nx, Role.HALO);
+    shape.push(toSuX(cssX), toSuY(cssY), -0.6 + rand() * 0.8, 0.15 + 0.6 * nx + 0.25 * rand(), RAMP.steel, 0.1, nx, Role.HALO, NAME_GROUP.rest);
   }
 
   // Sparks: an ember hairline .14em below the (last) baseline, across the
@@ -438,10 +464,25 @@ export function sampleName(input: NameSampleInput): NameSample {
     hx1 = f.left + f.width;
   }
   const hairY = lastBase + HAIRLINE_EM * f.size;
+  // Yearly ticks hang from the hairline (one per year, 0 … CAREER_YEARS; the
+  // developer → designer boundary longer), so the name reads as an axis.
+  if (f.lines.length === 1) {
+    const ticks = Math.floor(spark.capacity * TICK_SHARE);
+    const per = Math.max(1, Math.floor(ticks / (CAREER_YEARS + 1)));
+    for (let yr = 0; yr <= CAREER_YEARS && !spark.full; yr++) {
+      const cssX0 = hx0 + ((hx1 - hx0) * yr) / CAREER_YEARS;
+      const depth = (yr === DEV_YEARS ? TICK_EM_SPLIT : TICK_EM) * f.size;
+      for (let j = 0; j < per && !spark.full; j++) {
+        const cssX = cssX0 + (rand() * 2 - 1) * 0.6;
+        const cssY = hairY + rand() * depth;
+        spark.push(toSuX(cssX), toSuY(cssY), (rand() * 2 - 1) * 0.01, 0, RAMP.ember, 0.9, normX(cssX), Role.SPARK, NAME_GROUP.rest);
+      }
+    }
+  }
   while (!spark.full) {
     const cssX = hx0 + rand() * (hx1 - hx0);
     const cssY = hairY + (rand() * 2 - 1) * 0.3;
-    spark.push(toSuX(cssX), toSuY(cssY), (rand() * 2 - 1) * 0.01, 0, RAMP.ember, 0.9, normX(cssX), Role.SPARK);
+    spark.push(toSuX(cssX), toSuY(cssY), (rand() * 2 - 1) * 0.01, 0, RAMP.ember, 0.9, normX(cssX), Role.SPARK, NAME_GROUP.rest);
   }
 
   sortTargets(shape, COLUMNS_64, rand);

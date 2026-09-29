@@ -71,7 +71,8 @@ src/
     initialHash.ts        the first load's deep-link hash (window.__dtwHash, index.html)
   field/
     layout.ts             SINGLE SOURCE OF TRUTH for anchor boxes (vw/svh), desktop + mobile; CHART geometry,
-                          card box, slot heights, MQ; resolveAnchor(); layoutCss(); applyLayoutVars()
+                          card box, slot heights, MQ, NAME_TIMELINE (the name as a career timeline: S1 colour /
+                          groups / ticks + the hero's DOM axis); resolveAnchor(); layoutCss(); applyLayoutVars()
     states/ids.ts         StateId (const object + type; enums are not allowed by erasableSyntaxOnly)
     index.ts, uniforms.ts, tiers.ts   contracts: bootField/acquire/release/getField, STATE_PARAMS, tier table
     FieldCanvas.tsx       the #field-root host: idle-callback acquire, setMode, scroll → invalidate
@@ -89,7 +90,8 @@ src/
                           feeble device / engine failure) and the engine's context-loss overlay (LossFallback)
   chapters/               Hero, About, CareerChart, Nda, Projects, ProjectPanel, Capabilities, Contact
   components/             Chapter, ChapterHeading, LinkLabel, Chip, SkipLink, Atmosphere, Nav, MobileMenu,
-                          Rail, Hud, Footer, CopyEmail, MotionToggle, CursorRing, JumpCutOverlay, EmblemOutline
+                          Rail, Hud, SignalMeter (the hero's S/N meter), signal.ts (the shared S/N sampler),
+                          Footer, CopyEmail, MotionToggle, CursorRing, JumpCutOverlay, EmblemOutline
   pages/                  HomePage (composes chapters), ProjectDetailPage, NotFoundPage
 scripts/                  gen-layout-css.mjs, make-grain.mjs, make-og.mjs, prerender-plugin.mjs (+ .d.mts; build
                           prerender with per-route og:title / og:url / canonical, and the `vite preview` 404 fallback)
@@ -154,6 +156,7 @@ scripts/                  gen-layout-css.mjs, make-grain.mjs, make-og.mjs, prere
 - `.t-display-l`: chapter statements.
 - `.t-display-m`: the hero lede, NDA heading, capability titles and the email address.
 - `.t-stat`: chart numerals.
+- `.t-readout`: the hero's S/N meter value (JetBrains Mono light, tabular; aria-hidden).
 - `.t-lede`: lede paragraphs.
 - `.t-body`: body copy, max 62ch.
 - `.t-accent`: Instrument Serif italic at 1.04em, in ember. Use it for one to three voice words.
@@ -185,10 +188,11 @@ scripts/                  gen-layout-css.mjs, make-grain.mjs, make-og.mjs, prere
 - `[data-field-anchor="Sx"]`: positioned from the `--anchor-<state>-x|y|w|h` variables.
 - `.field-slot[data-slot=about|work|project|capabilities]`: mobile only. It is `display: none` on desktop.
 - `[data-safe]` (alias `.scrim`): a void scrim at .82 opacity, 48px beyond the block, with an eased (smootherstep) feather. The shader caps particles inside these rects at α .06 as well.
+- `.soft-scrim` (on a chapter) + `.stage-scrim` (an aria-hidden div first in its stage): one soft radial scrim for the whole stage instead of a box per `[data-safe]` block (the hero). The shader mask still applies per block.
 - `.chip`.
 - `.btn` with `.btn-ember`, `.btn-line` or `.btn-outline-ember`: 48px tall.
 - `.link-line`: a 1px underline that scales in; 44px tall.
-- `.scan-print`: the h1 mask driven by `--scan`.
+- `.scan-print`: the h1 mask driven by `--scan`; the masked part keeps `--ghost` opacity (the hero's ghost name at rest).
 - `.skip-link`.
 - `.field-root`, `.atmo`, `.atmo-vignette`, `.atmo-grain`.
 
