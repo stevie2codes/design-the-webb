@@ -2,7 +2,7 @@
   command = "npm run build"
   publish = "dist"
 
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
+# No SPA catch-all: the build prerenders every route (scripts/prerender-plugin.mjs):
+# "/" → index.html, "/work/<slug>" → work/<slug>.html, and Netlify serves
+# 404.html (status 404) for any other path. A "/* → /index.html" rewrite would
+# shadow 404.html and show the home page, with JS off, on unknown URLs.

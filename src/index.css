@@ -1,56 +1,1003 @@
 @import "tailwindcss";
 
-@theme {
-  --font-display: 'Bricolage Grotesque', system-ui, sans-serif;
-  --font-body: 'DM Sans', system-ui, sans-serif;
-  --color-cream: #faf9f5;
-  --color-cream-dark: #f0ede5;
-  --color-orange: #d97757;
-  --color-orange-light: #e8a08a;
-  --color-orange-dark: #c86641;
-  --color-dark: #141413;
-  --color-dark-soft: #2a2a28;
-  --color-muted: #706d65;
-  --color-line: #e0ddd4;
+/* ═══════════════════════════════════════════════════════════════════════════
+   Signal from Noise — design tokens, base and component layers.
+   Source of truth: docs/redesign/SPEC.md (§2 tokens, §4 scroll structure).
+   Custom CSS must live inside @layer base / @layer components: un-layered
+   styles beat every Tailwind utility.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Variants ──────────────────────────────────────────────────────────────
+   Layout (§2.6, §4.2). Keep these media queries identical to MQ in
+   src/field/layout.ts and the pre-paint script in index.html.
+     mobile:   width < 768, or width < 1024 in portrait (not short landscape)
+     desktop:  everything else (includes short landscape phones)
+     short:    height < 600 (mobile slots shrink)
+     low:      height ≤ 760 — the short-laptop tier: real browser viewports
+               of 1366×768 / 1536×864 (125%) / 1280×800 screens are 640–730px
+               tall; the stuck About and Capabilities stages tighten so their
+               [data-fit] content fits 100svh down to 640px (the fit guard)
+     fine:     pointer: fine                                                  */
+@custom-variant mobile {
+  @media (max-width: 1023.98px) and (orientation: portrait), (max-width: 767.98px) and (min-height: 500px) {
+    @slot;
+  }
+}
+@custom-variant desktop {
+  @media (min-width: 1024px), (min-width: 768px) and (orientation: landscape), (orientation: landscape) and (max-height: 499.98px) {
+    @slot;
+  }
+}
+@custom-variant short {
+  @media (max-height: 599.98px) {
+    @slot;
+  }
+}
+@custom-variant low {
+  @media (max-height: 760px) {
+    @slot;
+  }
+}
+@custom-variant fine {
+  @media (pointer: fine) {
+    @slot;
+  }
 }
 
-@layer base {
-  html {
-    scroll-behavior: smooth;
+/* Paths (§9.12). html gets `js` or `no-js`, plus `rm` for reduced motion,
+   from the pre-paint script; the field sets html[data-field="live"].
+     js:        JS is running          nojs:      JS is off
+     live:      JS and full motion     rm:        reduced motion
+     field-live / no-field:  the WebGL field is (not) drawing
+     field-s2 … field-s9, no-field-s10:  the field is (not) drawing state k
+     intro:     the §6 intro is expected (pre-paint guess) or running
+     staged:    inside a chapter whose stage is actually sticky right now
+                (desktop sticky chapters; hero/contact on mobile; hero only on
+                short landscape) — use it for stacked/absolute stage layouts
+                that must fall back to flow under no-js / rm, and when the
+                fit guard drops a chapter to flow (section[data-overflow]).  */
+@custom-variant js (&:where(.js, .js *));
+@custom-variant nojs (&:where(.no-js, .no-js *));
+@custom-variant live (&:where(.js:not(.rm), .js:not(.rm) *));
+@custom-variant rm (&:where(.rm, .rm *));
+@custom-variant field-live (&:where([data-field="live"], [data-field="live"] *));
+@custom-variant no-field (&:where(html:not([data-field="live"]), html:not([data-field="live"]) *));
+/* Per state: the field — WebGL ("live") or the Canvas2D fallback — is
+   drawing state k (each lists its resident ids in html[data-field-states];
+   the fallback never lists 2, §8.4 keeps the chart's SVG bars). DOM
+   stand-ins for a state — the chart's SVG bars, the NDA slabs, emblem
+   outlines, the stack plates, the beacon shell, the 404 flatline — hide only
+   once THEIR state draws, so a state whose generator has not landed yet
+   never leaves a hole, and a drawn state is never doubled by its stand-in. */
+@custom-variant field-s2 (&:where(:is([data-field="live"], [data-field="fallback"])[data-field-states~="2"], :is([data-field="live"], [data-field="fallback"])[data-field-states~="2"] *));
+@custom-variant field-s3 (&:where(:is([data-field="live"], [data-field="fallback"])[data-field-states~="3"], :is([data-field="live"], [data-field="fallback"])[data-field-states~="3"] *));
+@custom-variant field-s4 (&:where(:is([data-field="live"], [data-field="fallback"])[data-field-states~="4"], :is([data-field="live"], [data-field="fallback"])[data-field-states~="4"] *));
+@custom-variant field-s5 (&:where(:is([data-field="live"], [data-field="fallback"])[data-field-states~="5"], :is([data-field="live"], [data-field="fallback"])[data-field-states~="5"] *));
+@custom-variant field-s6 (&:where(:is([data-field="live"], [data-field="fallback"])[data-field-states~="6"], :is([data-field="live"], [data-field="fallback"])[data-field-states~="6"] *));
+@custom-variant field-s7 (&:where(:is([data-field="live"], [data-field="fallback"])[data-field-states~="7"], :is([data-field="live"], [data-field="fallback"])[data-field-states~="7"] *));
+@custom-variant field-s8 (&:where(:is([data-field="live"], [data-field="fallback"])[data-field-states~="8"], :is([data-field="live"], [data-field="fallback"])[data-field-states~="8"] *));
+@custom-variant field-s9 (&:where(:is([data-field="live"], [data-field="fallback"])[data-field-states~="9"], :is([data-field="live"], [data-field="fallback"])[data-field-states~="9"] *));
+@custom-variant no-field-s10 (&:where(html:not(:is([data-field="live"], [data-field="fallback"])[data-field-states~="10"]), html:not(:is([data-field="live"], [data-field="fallback"])[data-field-states~="10"]) *));
+/* The §6 intro is expected or running: html[data-intro="pending"] (the
+   pre-paint script's guess, until the engine decides) or "running" (engine). */
+@custom-variant intro (&:where([data-intro], [data-intro] *));
+@custom-variant staged {
+  @media (min-width: 1024px) and (min-height: 500px), (min-width: 768px) and (orientation: landscape) and (min-height: 500px) {
+    &:where(html.js:not(.rm) .chapter[data-sticky]:not([data-overflow]) *) {
+      @slot;
+    }
   }
-
-  body {
-    font-family: var(--font-body);
-    background-color: var(--color-cream);
-    color: var(--color-dark);
-    min-height: 100vh;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+  @media (orientation: landscape) and (max-height: 499.98px) {
+    &:where(html.js:not(.rm) .chapter[data-sticky-short]:not([data-overflow]) *) {
+      @slot;
+    }
   }
-
-  /* Paper grain — SVG feTurbulence noise overlay for warm, tactile feel.
-     Disabled on mobile/tablet: feTurbulence is extremely expensive on low-power GPUs. */
-  body::after {
-    content: '';
-    position: fixed;
-    inset: 0;
-    z-index: 9999;
-    pointer-events: none;
-    opacity: 0.4;
-    mix-blend-mode: multiply;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='600'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)' opacity='0.08'/%3E%3C/svg%3E");
-    background-repeat: repeat;
-    background-size: 600px 600px;
+  @media (max-width: 1023.98px) and (orientation: portrait), (max-width: 767.98px) and (min-height: 500px) {
+    &:where(html.js:not(.rm) .chapter[data-sticky-mobile]:not([data-overflow]) *) {
+      @slot;
+    }
   }
+}
 
-  @media (max-width: 1024px), (pointer: coarse) {
-    body::after {
-      display: none;
+/* ─── Tokens (§2.1) ─────────────────────────────────────────────────────── */
+@theme {
+  --color-*: initial; /* drop Tailwind's default palette entirely */
+
+  --color-void: #050507; /* page bg + WebGL clear colour */
+  --color-deep: #0a0a0e; /* footer, mobile menu */
+  --color-surface: #111117; /* cards, screenshot frames */
+  --color-surface-2: #18181f; /* hover / pressed surface */
+  --color-line: rgb(242 238 230 / 0.1); /* hairlines, chip borders (decorative) */
+  --color-line-strong: rgb(242 238 230 / 0.18); /* rail track, dividers (decorative) */
+
+  --color-ink: #f2eee6; /* primary text (warm bone) */
+  --color-ink-2: #a7a39a; /* body copy, secondary */
+  --color-ink-3: #8c887f; /* tertiary: meta/captions on SOLID surfaces only */
+
+  --color-ember: #ff6a3d; /* THE accent: labels, accent words, focus ring, primary CTA bg */
+  --color-ember-hot: #ffb08a; /* hover state of ember text */
+  --color-ember-deep: #b8361a; /* pressed CTA only (never text) */
+  --color-core: #ffe2cf; /* beacon CTA disc */
+  --color-steel: #8c97ad; /* chart legend swatch (non-text), particle steel */
+
+  --font-sans: "Archivo Variable", "Archivo Fallback", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Instrument Serif", "Instrument Serif Fallback", ui-serif, Georgia, serif;
+  --font-mono: "JetBrains Mono Variable", "JetBrains Mono Fallback", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --ease-cine: cubic-bezier(0.7, 0, 0.2, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-expo: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-ui: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --radius-media: 16px;
+  --radius-pill: 999px;
+
+  /* Hero scroll cue: the dot travels the 1px line (its wrapper is the line's
+     full height, so 100% = the line length). Off under html.rm. */
+  --animate-cue: cue-travel 2.4s var(--ease-cine) infinite;
+  @keyframes cue-travel {
+    0% {
+      transform: translateY(0);
+      opacity: 0;
+    }
+    20%,
+    80% {
+      opacity: 1;
+    }
+    100% {
+      transform: translateY(100%);
+      opacity: 0;
     }
   }
 
+  /* Layout measures (§2.6) as spacing tokens: px-gutter, left-gutter,
+     gap-x-col-gap, w-card… The values live in the generated block below. */
+  --spacing-gutter: var(--gutter);
+  --spacing-col-gap: var(--col-gap);
+  --spacing-card-w: var(--card-w);
+  --spacing-card-h: var(--card-h);
+}
+
+/* ─── Base ──────────────────────────────────────────────────────────────── */
+/* Metric-matched fallback faces (§8.5 CLS 0): until Archivo, Instrument Serif
+   and JetBrains Mono swap in, local Times / Courier metrics are scaled to theirs, so
+   the swap changes glyph shapes, not widths or line boxes. Measured in
+   Chromium at 100px: Archivo 400 advance 0.99 × Arial, 600 0.95 × Arial Bold,
+   800 at 75% width 0.8065 × Arial Bold; ascent .88 / descent .21;
+   Instrument Serif italic advance 0.8794 × Times italic,
+   ascent .99 / descent .31; JetBrains Mono advance = Courier (.6em), ascent
+   1.02 / descent .30. (@font-face is not a style rule: layers do not apply.) */
+@font-face {
+  font-family: "Archivo Fallback";
+  font-style: normal;
+  font-weight: 100 549;
+  font-stretch: 100%;
+  src: local("Arial"), local("ArialMT"), local("Liberation Sans"), local("LiberationSans");
+  size-adjust: 99%;
+  ascent-override: 88.9%;
+  descent-override: 21.2%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Archivo Fallback";
+  font-style: normal;
+  font-weight: 550 900;
+  font-stretch: 100%;
+  src: local("Arial Bold"), local("Arial-BoldMT"), local("Liberation Sans Bold"), local("LiberationSans-Bold");
+  size-adjust: 95%;
+  ascent-override: 92.6%;
+  descent-override: 22.1%;
+  line-gap-override: 0%;
+}
+/* The h1 (.t-name: 800 at 75% width): Arial Bold scaled to Archivo's condensed advance. */
+@font-face {
+  font-family: "Archivo Fallback";
+  font-style: normal;
+  font-weight: 550 900;
+  font-stretch: 75%;
+  src: local("Arial Bold"), local("Arial-BoldMT"), local("Liberation Sans Bold"), local("LiberationSans-Bold");
+  size-adjust: 80.65%;
+  ascent-override: 109.1%;
+  descent-override: 26.3%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Instrument Serif Fallback";
+  font-style: italic;
+  font-weight: 400;
+  src: local("Times New Roman Italic"), local("TimesNewRomanPS-ItalicMT"), local("Times Italic"),
+    local("Liberation Serif Italic"), local("LiberationSerif-Italic");
+  size-adjust: 87.94%;
+  ascent-override: 112.6%;
+  descent-override: 35.3%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "JetBrains Mono Fallback";
+  font-style: normal;
+  font-weight: 100 800;
+  src: local("Courier New"), local("CourierNewPSMT"), local("Liberation Mono"), local("LiberationMono");
+  size-adjust: 100%;
+  ascent-override: 102%;
+  descent-override: 30%;
+  line-gap-override: 0%;
+}
+
+@layer base {
+  /* Layout variables: gutters, name size, card box, mobile slot heights and
+     every field anchor box (--anchor-<state>-x|y|w|h[-extra]).
+     Generated from src/field/layout.ts; do not edit by hand. */
+  /* @generated layout-vars:start — edit src/field/layout.ts, then `npm run gen:layout` */
+  :root {
+    --gutter: clamp(20px, 4vw, 64px);
+    --col-gap: clamp(12px, 1.6vw, 28px);
+    --name-fs: min(13.2vw, 30svh);
+    --card-w: min(44vw, 88.1svh, (50svh - 128px) * 2.5184);
+    --card-h: calc(var(--card-w) * 953 / 1200);
+    --slot-about: 52svh;
+    --slot-work: 44svh;
+    --slot-project: 42svh;
+    --slot-capabilities: 44svh;
+    --anchor-static-x: 0px;
+    --anchor-static-y: 0px;
+    --anchor-static-w: 100vw;
+    --anchor-static-h: 100svh;
+    --anchor-name-x: var(--gutter);
+    --anchor-name-y: calc(62svh - (var(--name-fs) * 0.69));
+    --anchor-name-w: calc(var(--name-fs) * 6.518);
+    --anchor-name-h: calc(var(--name-fs) * 0.69);
+    --anchor-chart-x: 54vw;
+    --anchor-chart-y: calc(min(80svh, 100svh - 180px) - 52svh);
+    --anchor-chart-w: 38vw;
+    --anchor-chart-h: 52svh;
+    --anchor-chart-baseline: min(80svh, 100svh - 180px);
+    --anchor-redacted-x: 54vw;
+    --anchor-redacted-y: 23.75svh;
+    --anchor-redacted-w: 38vw;
+    --anchor-redacted-h: 42.5svh;
+    --anchor-pulse-x: calc(70vw - (var(--card-w) / 2));
+    --anchor-pulse-y: calc(50svh - (var(--card-h) / 2));
+    --anchor-pulse-w: var(--card-w);
+    --anchor-pulse-h: var(--card-h);
+    --anchor-lattice-x: calc(30vw - (var(--card-w) / 2));
+    --anchor-lattice-y: calc(50svh - (var(--card-h) / 2));
+    --anchor-lattice-w: var(--card-w);
+    --anchor-lattice-h: var(--card-h);
+    --anchor-deck-x: calc(70vw - (var(--card-w) / 2));
+    --anchor-deck-y: calc(50svh - (var(--card-h) / 2));
+    --anchor-deck-w: var(--card-w);
+    --anchor-deck-h: var(--card-h);
+    --anchor-constellation-x: calc(30vw - (var(--card-w) / 2));
+    --anchor-constellation-y: calc(50svh - (var(--card-h) / 2));
+    --anchor-constellation-w: var(--card-w);
+    --anchor-constellation-h: var(--card-h);
+    --anchor-stack-x: 52vw;
+    --anchor-stack-y: 22svh;
+    --anchor-stack-w: 36vw;
+    --anchor-stack-h: 64svh;
+    --anchor-beacon-x: calc(50vw - 12svh);
+    --anchor-beacon-y: 40svh;
+    --anchor-beacon-w: 24svh;
+    --anchor-beacon-h: 24svh;
+    --anchor-beacon-cx: 50vw;
+    --anchor-beacon-cy: 52svh;
+    --anchor-beacon-r: 12svh;
+    --anchor-flatline-x: 8vw;
+    --anchor-flatline-y: 68svh;
+    --anchor-flatline-w: 84vw;
+    --anchor-flatline-h: 0px;
+  }
+  @media (max-width: 1023.98px) and (orientation: portrait), (max-width: 767.98px) and (min-height: 500px) {
+    :root {
+      --name-fs: calc((100vw - (var(--gutter) * 2)) / 3.92);
+      --card-w: calc(100vw - (var(--gutter) * 2));
+      --anchor-name-y: 20svh;
+      --anchor-name-w: calc(var(--name-fs) * 3.9);
+      --anchor-name-h: calc(var(--name-fs) * 1.72);
+      --anchor-chart-x: var(--gutter);
+      --anchor-chart-y: 10svh;
+      --anchor-chart-w: calc(100vw - (var(--gutter) * 2));
+      --anchor-chart-h: 30svh;
+      --anchor-chart-baseline: 40svh;
+      --anchor-redacted-x: var(--gutter);
+      --anchor-redacted-y: 7.125svh;
+      --anchor-redacted-w: calc(100vw - (var(--gutter) * 2));
+      --anchor-redacted-h: 29.75svh;
+      --anchor-pulse-x: var(--gutter);
+      --anchor-pulse-y: 0px;
+      --anchor-pulse-w: calc(100vw - (var(--gutter) * 2));
+      --anchor-pulse-h: 42svh;
+      --anchor-lattice-x: var(--gutter);
+      --anchor-lattice-y: 0px;
+      --anchor-lattice-w: calc(100vw - (var(--gutter) * 2));
+      --anchor-lattice-h: 42svh;
+      --anchor-deck-x: var(--gutter);
+      --anchor-deck-y: 0px;
+      --anchor-deck-w: calc(100vw - (var(--gutter) * 2));
+      --anchor-deck-h: 42svh;
+      --anchor-constellation-x: var(--gutter);
+      --anchor-constellation-y: 0px;
+      --anchor-constellation-w: calc(100vw - (var(--gutter) * 2));
+      --anchor-constellation-h: 42svh;
+      --anchor-stack-x: 8vw;
+      --anchor-stack-y: 2svh;
+      --anchor-stack-w: 84vw;
+      --anchor-stack-h: 40svh;
+      --anchor-beacon-x: 26vw;
+      --anchor-beacon-y: calc(46svh - 24vw);
+      --anchor-beacon-w: 48vw;
+      --anchor-beacon-h: 48vw;
+      --anchor-beacon-cy: 46svh;
+      --anchor-beacon-r: 24vw;
+      --anchor-flatline-x: var(--gutter);
+      --anchor-flatline-y: 70svh;
+      --anchor-flatline-w: calc(100vw - (var(--gutter) * 2));
+    }
+    @media (max-height: 599.98px) {
+      :root {
+        --slot-about: 34svh;
+        --slot-work: 34svh;
+        --slot-project: 34svh;
+        --slot-capabilities: 34svh;
+        --anchor-chart-y: 0.4svh;
+        --anchor-chart-h: 24svh;
+        --anchor-chart-baseline: 24.4svh;
+        --anchor-redacted-y: 5.1svh;
+        --anchor-redacted-h: 23.8svh;
+        --anchor-pulse-h: 34svh;
+        --anchor-lattice-h: 34svh;
+        --anchor-deck-h: 34svh;
+        --anchor-constellation-h: 34svh;
+        --anchor-stack-x: 16.4vw;
+        --anchor-stack-y: 1svh;
+        --anchor-stack-w: 67.2vw;
+        --anchor-stack-h: 32svh;
+        --anchor-beacon-x: 30.8vw;
+        --anchor-beacon-y: calc(44svh - 19.2vw);
+        --anchor-beacon-w: 38.4vw;
+        --anchor-beacon-h: 38.4vw;
+        --anchor-beacon-cy: 44svh;
+        --anchor-beacon-r: 19.2vw;
+      }
+    }
+  }
+  [data-field-anchor="S0"] { --ax: var(--anchor-static-x); --ay: var(--anchor-static-y); --aw: var(--anchor-static-w); --ah: var(--anchor-static-h); }
+  [data-field-anchor="S1"] { --ax: var(--anchor-name-x); --ay: var(--anchor-name-y); --aw: var(--anchor-name-w); --ah: var(--anchor-name-h); }
+  [data-field-anchor="S2"] { --ax: var(--anchor-chart-x); --ay: var(--anchor-chart-y); --aw: var(--anchor-chart-w); --ah: var(--anchor-chart-h); }
+  [data-field-anchor="S3"] { --ax: var(--anchor-redacted-x); --ay: var(--anchor-redacted-y); --aw: var(--anchor-redacted-w); --ah: var(--anchor-redacted-h); }
+  [data-field-anchor="S4"] { --ax: var(--anchor-pulse-x); --ay: var(--anchor-pulse-y); --aw: var(--anchor-pulse-w); --ah: var(--anchor-pulse-h); }
+  [data-field-anchor="S5"] { --ax: var(--anchor-lattice-x); --ay: var(--anchor-lattice-y); --aw: var(--anchor-lattice-w); --ah: var(--anchor-lattice-h); }
+  [data-field-anchor="S6"] { --ax: var(--anchor-deck-x); --ay: var(--anchor-deck-y); --aw: var(--anchor-deck-w); --ah: var(--anchor-deck-h); }
+  [data-field-anchor="S7"] { --ax: var(--anchor-constellation-x); --ay: var(--anchor-constellation-y); --aw: var(--anchor-constellation-w); --ah: var(--anchor-constellation-h); }
+  [data-field-anchor="S8"] { --ax: var(--anchor-stack-x); --ay: var(--anchor-stack-y); --aw: var(--anchor-stack-w); --ah: var(--anchor-stack-h); }
+  [data-field-anchor="S9"] { --ax: var(--anchor-beacon-x); --ay: var(--anchor-beacon-y); --aw: var(--anchor-beacon-w); --ah: var(--anchor-beacon-h); }
+  [data-field-anchor="S10"] { --ax: var(--anchor-flatline-x); --ay: var(--anchor-flatline-y); --aw: var(--anchor-flatline-w); --ah: var(--anchor-flatline-h); }
+  /* @generated layout-vars:end */
+
+  html {
+    background-color: var(--color-void);
+    color: var(--color-ink);
+    color-scheme: dark;
+    font-family: var(--font-sans);
+    font-stretch: 100%;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    -webkit-tap-highlight-color: transparent;
+    /* clip (never hidden): it does not create a scroll container, so
+       position: sticky keeps working. Guards against 100vw anchor boxes
+       overflowing next to a classic scrollbar. */
+    overflow-x: clip;
+    /* Focus scrolling (Tab / Shift+Tab) and fragment jumps stop below the
+       fixed nav band (64px nav + its 96px scrim; 56 + 80 on mobile) plus the
+       5px focus ring (offset 3 + width 2), so a ring is never tucked under
+       it (WCAG 2.4.12). Scripted jumps use explicit window.scrollTo targets
+       and are unaffected. */
+    scroll-padding-top: calc(6rem + 8px);
+  }
+  @media (max-width: 1023.98px) and (orientation: portrait), (max-width: 767.98px) and (min-height: 500px) {
+    html {
+      scroll-padding-top: calc(5rem + 8px);
+    }
+  }
+
+  body {
+    min-height: 100svh;
+    /* Transparent on purpose: html paints the void and body::before paints
+       the glow; an opaque body background would cover the glow. */
+    background-color: transparent;
+  }
+
+  /* First-paint backdrop, and the no-JS / no-canvas last resort (§6, §8.4).
+     The WebGL canvas (clear colour void) covers it once the field is live. */
+  body::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100lvh;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(60% 40% at 40% 55%, rgb(255 106 61 / 0.06), transparent 70%),
+      radial-gradient(50% 50% at 75% 40%, rgb(140 151 173 / 0.05), transparent 70%);
+  }
+
+  /* Focus (§8.1): every hover effect must also fire on :focus-visible.
+     The ring colour is set everywhere up front, so utilities that transition
+     outline-color (transition-colors) never fade it in from currentColor. */
+  *,
+  ::before,
+  ::after {
+    outline-color: var(--color-ember);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-ember);
+    outline-offset: 3px;
+  }
+  #main:focus {
+    outline: none; /* skip-link target; the ring would wrap the whole page */
+  }
+
   ::selection {
-    background-color: var(--color-orange);
-    color: white;
+    background-color: var(--color-ember);
+    color: var(--color-void);
+  }
+
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+
+  /* Lenis: lenis/dist/lenis.css (imported in main.tsx) carries the
+     recommended rules; smooth scrolling must never stack with CSS smooth. */
+  html.lenis.lenis-smooth {
+    scroll-behavior: auto !important;
+  }
+
+  /* No JS: native smooth anchor jumps, unless the OS asks for less motion. */
+  @media (prefers-reduced-motion: no-preference) {
+    html.no-js {
+      scroll-behavior: smooth;
+    }
+  }
+
+  /* Reduced motion (§8.2): nothing loops and nothing travels. Colour
+     transitions (hover/focus) are allowed. */
+  html.rm *,
+  html.rm *::before,
+  html.rm *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+    scroll-behavior: auto !important;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html.no-js *,
+    html.no-js *::before,
+    html.no-js *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      animation-delay: 0s !important;
+    }
+  }
+}
+
+/* ─── Components ────────────────────────────────────────────────────────── */
+@layer components {
+  /* Type roles (§2.5). Each sets family, weight, width, size, leading and
+     tracking together; add colour with text-ink / text-ink-2 / text-ember. */
+  .t-name {
+    font-family: var(--font-sans);
+    font-weight: 800;
+    font-stretch: 75%;
+    text-transform: uppercase;
+    white-space: nowrap;
+    font-size: var(--name-fs); /* min(13.2vw, 30svh); mobile (100vw − 2·gutter) / 3.92 */
+    line-height: 0.86;
+    letter-spacing: 0;
+  }
+  .t-display-xl {
+    font-family: var(--font-sans);
+    font-weight: 760;
+    font-stretch: 75%;
+    text-transform: uppercase;
+    font-size: clamp(3rem, 1.4rem + 6.4vw, 8.5rem);
+    line-height: 0.9;
+    letter-spacing: 0;
+  }
+  .t-title {
+    font-family: var(--font-sans);
+    font-weight: 760;
+    font-stretch: 75%;
+    text-transform: uppercase;
+    font-size: clamp(2.25rem, 1rem + 4vw, 5.25rem);
+    line-height: 0.92;
+    letter-spacing: 0;
+  }
+  .t-display-l {
+    font-family: var(--font-sans);
+    font-weight: 340;
+    font-stretch: 100%;
+    font-size: clamp(2.25rem, 1.3rem + 3.4vw, 5rem);
+    line-height: 1.02;
+    letter-spacing: -0.035em;
+  }
+  .t-display-m {
+    font-family: var(--font-sans);
+    font-weight: 400;
+    font-stretch: 100%;
+    font-size: clamp(1.625rem, 1.1rem + 1.8vw, 2.75rem);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+  }
+  .t-stat {
+    font-family: var(--font-sans);
+    font-weight: 300;
+    font-stretch: 75%;
+    font-variant-numeric: tabular-nums;
+    font-size: clamp(3.5rem, 2rem + 6vw, 7.5rem);
+    line-height: 0.85;
+    letter-spacing: -0.01em;
+  }
+  .t-lede {
+    font-family: var(--font-sans);
+    font-weight: 400;
+    font-stretch: 100%;
+    font-size: clamp(1.125rem, 1rem + 0.5vw, 1.4375rem);
+    line-height: 1.5;
+    letter-spacing: -0.005em;
+  }
+  .t-body {
+    font-family: var(--font-sans);
+    font-weight: 400;
+    font-stretch: 100%;
+    font-size: clamp(1rem, 0.96rem + 0.2vw, 1.0625rem);
+    line-height: 1.7;
+    letter-spacing: 0;
+    max-width: 62ch;
+  }
+  /* Voice words: Instrument Serif italic at 1.04em of the parent (x-height match). */
+  .t-accent {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 400;
+    font-stretch: 100%;
+    font-synthesis: none;
+    font-size: 1.04em;
+    line-height: inherit;
+    letter-spacing: -0.01em;
+    color: var(--color-ember);
+  }
+  .t-label {
+    font-family: var(--font-mono);
+    font-weight: 500;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    letter-spacing: 0.14em;
+  }
+  /* aria-hidden decoration only (11px). */
+  .t-micro {
+    font-family: var(--font-mono);
+    font-weight: 450;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.6875rem;
+    line-height: 1.3;
+    letter-spacing: 0.08em;
+  }
+
+  /* The hero <h1> print (§9.5): JS writes --scan (0–100%) while the beam
+     sweeps. Without JS --scan is unset, so the name stays fully visible. */
+  .scan-print {
+    -webkit-mask-image: linear-gradient(90deg, #000 var(--scan, 100%), transparent calc(var(--scan, 100%) + 2%));
+    mask-image: linear-gradient(90deg, #000 var(--scan, 100%), transparent calc(var(--scan, 100%) + 2%));
+  }
+
+  /* §6 intro failsafe: html[data-intro="pending"] (the pre-paint guess)
+     holds the scroll cue until the engine starts the intro or drops the
+     guess; if neither happens within 4 s, the cue fades in anyway. */
+  html[data-intro="pending"] [data-scroll-cue] > * {
+    animation: intro-failsafe 700ms var(--ease-ui) 4s both;
+  }
+
+  /* ── Chapters and stages (§4.1, §4.2, §9.11) ─────────────────────────────
+     <Chapter> renders <section class="chapter" data-sticky…> > <div class="stage">
+     with --chapter-l / --chapter-l-mobile. Sticky only under html.js:not(.rm);
+     no-js and rm get plain flow with the same 100svh stage box, so
+     stage-relative layout is identical in every path.                       */
+  .chapter {
+    position: relative;
+  }
+  .stage {
+    position: relative;
+  }
+
+  /* Flow baseline. */
+  @media (min-width: 1024px), (min-width: 768px) and (orientation: landscape), (orientation: landscape) and (max-height: 499.98px) {
+    .chapter[data-sticky] > .stage {
+      min-height: 100svh;
+    }
+    .chapter[data-flow-h] {
+      min-height: var(--chapter-flow-h);
+    }
+  }
+  @media (max-width: 1023.98px) and (orientation: portrait), (max-width: 767.98px) and (min-height: 500px) {
+    .chapter[data-sticky-mobile] > .stage {
+      min-height: 100svh;
+    }
+  }
+
+  /* Sticky: desktop (all sticky chapters). */
+  @media (min-width: 1024px) and (min-height: 500px), (min-width: 768px) and (orientation: landscape) and (min-height: 500px) {
+    html.js:not(.rm) .chapter[data-sticky]:not([data-overflow]) {
+      height: calc(100svh + var(--chapter-l));
+    }
+    html.js:not(.rm) .chapter[data-sticky]:not([data-overflow]) > .stage {
+      position: sticky;
+      top: 0;
+      height: 100svh;
+    }
+  }
+  /* Sticky: short landscape phones (only the hero). */
+  @media (orientation: landscape) and (max-height: 499.98px) {
+    html.js:not(.rm) .chapter[data-sticky-short]:not([data-overflow]) {
+      height: calc(100svh + var(--chapter-l));
+    }
+    html.js:not(.rm) .chapter[data-sticky-short]:not([data-overflow]) > .stage {
+      position: sticky;
+      top: 0;
+      height: 100svh;
+    }
+  }
+  /* Sticky: mobile layout (hero and contact only). */
+  @media (max-width: 1023.98px) and (orientation: portrait), (max-width: 767.98px) and (min-height: 500px) {
+    html.js:not(.rm) .chapter[data-sticky-mobile]:not([data-overflow]) {
+      height: calc(100svh + var(--chapter-l-mobile));
+    }
+    html.js:not(.rm) .chapter[data-sticky-mobile]:not([data-overflow]) > .stage {
+      position: sticky;
+      top: 0;
+      height: 100svh;
+    }
+  }
+
+  /* ── Field anchors (§9.6) ──────────────────────────────────────────────────
+     Empty, aria-hidden boxes the field registers to. Place one inside the
+     stage (desktop) or inside the .field-slot (mobile); the generated
+     [data-field-anchor="Sx"] rules feed --ax/--ay/--aw/--ah from the
+     --anchor-* variables of the current layout. Measure them on refresh
+     only; a display:none anchor (other layout) measures 0 × 0 — skip it. */
+  [data-field-anchor] {
+    position: absolute;
+    left: var(--ax, 0px);
+    top: var(--ay, 0px);
+    width: var(--aw, 0px);
+    height: var(--ah, 0px);
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  /* Mobile field slot (§4.2): the empty aria-hidden block that opens a flow
+     chapter on mobile. Hidden on the desktop layout.
+     <div class="field-slot" data-slot="about" aria-hidden="true">
+       <div data-field-anchor="S2" /></div>                                  */
+  .field-slot {
+    position: relative;
+    display: none;
+    width: 100%;
+    height: var(--slot-h, var(--slot-work));
+    pointer-events: none;
+  }
+  .field-slot[data-slot="about"] {
+    --slot-h: var(--slot-about);
+  }
+  .field-slot[data-slot="work"] {
+    --slot-h: var(--slot-work);
+  }
+  .field-slot[data-slot="project"] {
+    --slot-h: var(--slot-project);
+  }
+  .field-slot[data-slot="capabilities"] {
+    --slot-h: var(--slot-capabilities);
+  }
+  @media (max-width: 1023.98px) and (orientation: portrait), (max-width: 767.98px) and (min-height: 500px) {
+    .field-slot {
+      display: block;
+    }
+  }
+
+  /* ── Text-safe scrim (§2.3) ────────────────────────────────────────────────
+     Every text block over the field carries [data-safe]: a void scrim 48px
+     (sides) / 80px (top, bottom; 48px for data-safe="tight") beyond the
+     block, feathered on all four edges. The field also dims
+     particles inside these rects (text-safe mask). .scrim is an alias.
+     - The 48px feather is an eased (smootherstep) ramp, not a linear one: a
+       linear ramp starts and stops abruptly (Mach bands), and together with
+       the shader mask's ramp it read as a hard dark box cut into the field
+       (CONTRACTS.md tuning notes). The hero blocks beside the name are
+       data-safe="tight" (48px): the eyebrow sits 20–50px above its cap line.
+     - No `isolation`: every ::before (z −1) drops into the stacking context
+       of <main> (relative z-2), so all scrims paint beneath all text and
+       above the canvas; a later block's scrim can never dim earlier text.
+     - Horizontally the scrim never reaches past the page gutter (20px on
+       phones), so it cannot widen the page.
+     - Only drawn while a field renderer runs (html[data-field] is set by the
+       engine: "live", or the Canvas2D fallback). Without one there is nothing
+       to scrim, and over the CSS glow it would only show as dark banding.   */
+  [data-safe],
+  .scrim {
+    position: relative;
+  }
+  [data-safe]::before,
+  .scrim::before {
+    /* smootherstep(t) at t = 0, 1/8 … 1, over --sf from each edge: 48px
+       across (bounded by the page gutter), --sfy (80px) top and bottom */
+    --sf: 48px;
+    --sfy: 80px;
+    --scrim-in:
+      transparent, rgb(0 0 0 / 0.011) calc(var(--sf) * 0.125), rgb(0 0 0 / 0.104) calc(var(--sf) * 0.25),
+      rgb(0 0 0 / 0.262) calc(var(--sf) * 0.375), rgb(0 0 0 / 0.5) calc(var(--sf) * 0.5),
+      rgb(0 0 0 / 0.738) calc(var(--sf) * 0.625), rgb(0 0 0 / 0.896) calc(var(--sf) * 0.75),
+      rgb(0 0 0 / 0.989) calc(var(--sf) * 0.875), #000 var(--sf);
+    --scrim-out:
+      #000 calc(100% - var(--sf)), rgb(0 0 0 / 0.989) calc(100% - var(--sf) * 0.875),
+      rgb(0 0 0 / 0.896) calc(100% - var(--sf) * 0.75), rgb(0 0 0 / 0.738) calc(100% - var(--sf) * 0.625),
+      rgb(0 0 0 / 0.5) calc(100% - var(--sf) * 0.5), rgb(0 0 0 / 0.262) calc(100% - var(--sf) * 0.375),
+      rgb(0 0 0 / 0.104) calc(100% - var(--sf) * 0.25), rgb(0 0 0 / 0.011) calc(100% - var(--sf) * 0.125), transparent;
+    --scrim-in-y:
+      transparent, rgb(0 0 0 / 0.011) calc(var(--sfy) * 0.125), rgb(0 0 0 / 0.104) calc(var(--sfy) * 0.25),
+      rgb(0 0 0 / 0.262) calc(var(--sfy) * 0.375), rgb(0 0 0 / 0.5) calc(var(--sfy) * 0.5),
+      rgb(0 0 0 / 0.738) calc(var(--sfy) * 0.625), rgb(0 0 0 / 0.896) calc(var(--sfy) * 0.75),
+      rgb(0 0 0 / 0.989) calc(var(--sfy) * 0.875), #000 var(--sfy);
+    --scrim-out-y:
+      #000 calc(100% - var(--sfy)), rgb(0 0 0 / 0.989) calc(100% - var(--sfy) * 0.875),
+      rgb(0 0 0 / 0.896) calc(100% - var(--sfy) * 0.75), rgb(0 0 0 / 0.738) calc(100% - var(--sfy) * 0.625),
+      rgb(0 0 0 / 0.5) calc(100% - var(--sfy) * 0.5), rgb(0 0 0 / 0.262) calc(100% - var(--sfy) * 0.375),
+      rgb(0 0 0 / 0.104) calc(100% - var(--sfy) * 0.25), rgb(0 0 0 / 0.011) calc(100% - var(--sfy) * 0.125), transparent;
+    content: "";
+    position: absolute;
+    inset: calc(-1 * var(--sfy)) max(calc(-1 * var(--sf)), calc(-1 * var(--gutter)));
+    z-index: -1;
+    pointer-events: none;
+    background-color: rgb(5 5 7 / 0.82);
+    /* Rounded, so the intersected ramps meet in a soft corner, not a mitre. */
+    border-radius: var(--sfy);
+    /* --scrim: a block's text reveal can scrub its scrim in with it (the C3
+       panels, chapters/projects/stage.ts), so no empty dark box shows before
+       the text does. */
+    opacity: var(--scrim, 1);
+    transition: opacity 300ms var(--ease-ui);
+    -webkit-mask-image:
+      linear-gradient(to right, var(--scrim-in), var(--scrim-out)),
+      linear-gradient(to bottom, var(--scrim-in-y), var(--scrim-out-y));
+    -webkit-mask-composite: source-in;
+    mask-image:
+      linear-gradient(to right, var(--scrim-in), var(--scrim-out)),
+      linear-gradient(to bottom, var(--scrim-in-y), var(--scrim-out-y));
+    mask-composite: intersect;
+  }
+  /* The hero blocks beside the S1 name keep the narrow 48px ramp (the
+     eyebrow sits 20–50px above the name's cap line). */
+  [data-safe="tight"]::before {
+    --sfy: 48px;
+  }
+  html:not([data-field]) [data-safe]::before,
+  html:not([data-field]) .scrim::before {
+    opacity: 0;
+  }
+  /* Scrubbed scrims follow the scroll directly (no 300ms lag behind their text). */
+  [data-p-exit][data-safe]::before {
+    transition: none;
+  }
+
+  /* ── Chips, buttons, links ─────────────────────────────────────────────── */
+  /* Tag chip: .t-label ink-2, 1px line border, pill (§5 C3). */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 28px;
+    padding: 0.25rem 0.75rem;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-pill);
+    font-family: var(--font-mono);
+    font-weight: 500;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    letter-spacing: 0.14em;
+    color: var(--color-ink-2);
+    white-space: nowrap;
+  }
+
+  /* Buttons: 48px tall, .t-label type. Colour-only hover (nothing moves). */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 48px;
+    padding-inline: 1.5rem;
+    border: 1px solid transparent;
+    border-radius: var(--radius-pill);
+    font-family: var(--font-mono);
+    font-weight: 500;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    letter-spacing: 0.14em;
+    white-space: nowrap;
+    transition:
+      background-color 240ms var(--ease-ui),
+      border-color 240ms var(--ease-ui),
+      color 240ms var(--ease-ui);
+  }
+  /* Primary: ember background, void text (7.16:1). */
+  .btn-ember {
+    background-color: var(--color-ember);
+    color: var(--color-void);
+  }
+  .btn-ember:hover,
+  .btn-ember:focus-visible {
+    background-color: var(--color-ember-hot);
+  }
+  .btn-ember:active {
+    background-color: var(--color-ember-deep);
+  }
+  /* Secondary: 1px line-strong border, ink text. */
+  .btn-line {
+    border-color: var(--color-line-strong);
+    color: var(--color-ink);
+  }
+  .btn-line:hover,
+  .btn-line:focus-visible {
+    border-color: var(--color-ink-2);
+    background-color: var(--color-surface-2);
+  }
+  /* Outline ember pill (nav Email ↗): fills ember with void text on hover. */
+  .btn-outline-ember {
+    border-color: var(--color-ember);
+    color: var(--color-ember);
+  }
+  .btn-outline-ember:hover,
+  .btn-outline-ember:focus-visible {
+    background-color: var(--color-ember);
+    color: var(--color-void);
+  }
+
+  /* Text link with a 1px underline that scales in on hover/focus; 44px hit area. */
+  .link-line {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    /* LinkLabel's arrow is its own flex item: its leading space collapses. */
+    gap: 0.5em;
+    min-height: 44px;
+    transition: color 240ms var(--ease-ui);
+  }
+  .link-line::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: calc(50% - 0.95em);
+    height: 1px;
+    background-color: currentColor;
+    transform: scaleX(0);
+    transform-origin: left center;
+    transition: transform 240ms var(--ease-ui);
+  }
+  .link-line:hover::after,
+  .link-line:focus-visible::after {
+    transform: scaleX(1);
+  }
+
+  /* Mobile menu open (§6): the page under the 97% overlay fades out, so no
+     ghost of the hero type sits behind the menu items. The field (canvas)
+     still glows through; the engine dims it separately. */
+  #main,
+  body > #root > footer {
+    transition: opacity 400ms var(--ease-out-expo);
+  }
+  #site-menu[data-open] ~ #main,
+  #site-menu[data-open] ~ footer {
+    opacity: 0;
+  }
+
+  /* Skip link (§8.1): off-screen until focused, then pinned top-left. */
+  .skip-link {
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    z-index: 80;
+    transform: translateY(-200%);
+  }
+  .skip-link:focus {
+    transform: none;
+  }
+
+  /* ── Backdrop layers (§2.4, §3.1) ──────────────────────────────────────────
+     z order: body::before glow (-1) → #field-root canvas host (0) →
+     atmosphere (1) → main / footer (z-2) → rail + HUD (30) → nav (40) and
+     the mobile progress bar (40, after the header in the DOM so the nav
+     scrim never covers it) → mobile menu (50) → jump-cut overlay (60) →
+     cursor ring (70) → skip link (80). */
+  .field-root {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100lvh; /* never resizes with the mobile URL bar */
+    z-index: 0;
+    pointer-events: none;
+  }
+  .atmo {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100lvh;
+    z-index: 1;
+    pointer-events: none;
+    overflow: hidden;
+  }
+  .atmo-vignette {
+    background: radial-gradient(ellipse 120% 90% at 50% 45%, transparent 55%, rgb(0 0 0 / 0.55) 100%);
+  }
+  /* Grain: static at .03 (Mid/Low); animated at .045 on the High tier, which
+     the engine flags with html[data-tier="high"]. Never mix-blend-mode. */
+  .atmo-grain {
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background-image: url("/textures/grain-128.png");
+    background-size: 128px 128px;
+    opacity: 0.03;
+  }
+  html[data-tier="high"]:not(.rm) .atmo-grain {
+    opacity: 0.045;
+    will-change: transform;
+    animation: grain-shift 0.5s steps(6) infinite; /* 12 fps */
+  }
+
+  /* ── Forced colors (Windows High Contrast…) ──────────────────────────────
+     The system palette owns every colour: the name is never masked (the
+     field that would stand in for it is not drawn — FieldCanvas does not
+     boot it), and the decorative layers go, including the scrims, which
+     would otherwise be recoloured into bright slabs, and the scroll cue
+     (nothing resolves without the field). */
+  @media (forced-colors: active) {
+    .scan-print {
+      -webkit-mask-image: none;
+      mask-image: none;
+    }
+    .field-root,
+    .atmo,
+    [data-safe]::before,
+    .scrim::before,
+    [data-scroll-cue] {
+      display: none;
+    }
+  }
+}
+
+@keyframes intro-failsafe {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes grain-shift {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-18%, 12%, 0);
   }
 }

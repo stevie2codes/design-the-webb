@@ -1,31 +1,77 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="no-js" style="background:#050507">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#050507" />
+    <script>
+      // Pre-paint (SPEC §9.11): runs before any stylesheet applies.
+      //  - no-js → js
+      //  - rm when the visitor chose "Reduced" in the footer toggle, or the OS
+      //    asks for reduced motion and they have not explicitly chosen "Full"
+      //  - data-layout: the mobile rule (keep in sync with MQ.mobile in
+      //    src/field/layout.ts and the `mobile` variant in src/index.css)
+      //  - data-intro="pending": the §6 intro will probably run (full motion,
+      //    home, no ?intro=0 / ?film=, no deep-link #hash, no forced colors;
+      //    the page always opens at the top). The scroll cue waits and the
+      //    HUD reads 1.00 until the engine runs the intro ("running") or drops the guess; a CSS
+      //    failsafe shows the cue after 4 s if nothing ever answers.
+      (function () {
+        var d = document.documentElement;
+        d.className = d.className.replace(/\bno-js\b/, 'js');
+        var stored = null;
+        try { stored = localStorage.getItem('dtw:motion'); } catch (e) {}
+        var osReduce = false;
+        try { osReduce = matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
+        if (stored === 'reduced' || (stored !== 'full' && osReduce)) d.classList.add('rm');
+        var mobile = false;
+        try {
+          mobile = matchMedia('(max-width: 1023.98px) and (orientation: portrait), (max-width: 767.98px) and (min-height: 500px)').matches;
+        } catch (e) {}
+        d.setAttribute('data-layout', mobile ? 'mobile' : 'desktop');
+        var q = location.search;
+        var forced = false;
+        try { forced = matchMedia('(forced-colors: active)').matches; } catch (e) {}
+        var film = /[?&]film=\s*-?[\d.]/.test(q);
+        var introOff = /[?&]intro=(0|false|off)(&|$)/i.test(q);
+        var deepLink = location.hash.length > 1;
+        if (!d.classList.contains('rm') && !forced && !film && !introOff && !deepLink && location.pathname === '/') {
+          d.setAttribute('data-intro', 'pending');
+        }
+      })();
+    </script>
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Stephen Webb — Senior Product Designer specializing in data-driven products, design systems, and AI-centric experiences. Currently at Tyler Technologies." />
     <meta property="og:title" content="Stephen Webb — Senior Product Designer" />
     <meta property="og:description" content="I design products where data meets decisions. Senior Product Designer at Tyler Technologies." />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://designthewebb.com" />
+    <meta property="og:site_name" content="designthewebb.com" />
     <meta property="og:image" content="https://designthewebb.com/og-image.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Stephen Webb — Senior Product Designer. I make complex data feel obvious." />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Stephen Webb — Senior Product Designer" />
     <meta name="twitter:description" content="I design products where data meets decisions." />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300;1,9..40,400&display=swap" rel="stylesheet" />
+    <meta name="twitter:image" content="https://designthewebb.com/og-image.png" />
+    <meta name="twitter:image:alt" content="Stephen Webb — Senior Product Designer. I make complex data feel obvious." />
     <title>Stephen Webb — Senior Product Designer</title>
   </head>
   <body>
     <div id="root"></div>
     <script>
-      // Prevent browser from restoring scroll position or scrolling to hash on reload
+      // No browser scroll restoration and no native fragment jump on load:
+      // the page opens at the top (the hero paints first). A deep link's
+      // hash is kept in window.__dtwHash; the app jumps to it after the
+      // first layout refresh and puts it back (src/scroll/initialHash.ts).
       if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
-      if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+      window.__dtwHash = location.hash;
+      if (location.hash) history.replaceState(history.state, '', location.pathname + location.search);
       scrollTo(0, 0);
     </script>
     <script type="module" src="/src/main.tsx"></script>

@@ -1,185 +1,238 @@
-import { useParams, Link } from "react-router-dom";
-import { useEffect } from "react";
-import { motion } from "framer-motion";
-import { ArrowLeft, ArrowUpRight, ExternalLink, Github, ImageIcon } from "lucide-react";
-import GSAPReveal from "../components/GSAPReveal";
-import SectionLabel from "../components/SectionLabel";
-import { sideProjects } from "../data/projects";
+import { useEffect, useRef } from 'react';
+import { Link, useNavigate, useNavigationType, useParams } from 'react-router-dom';
+import { ArrowRight } from 'lucide-react';
+import Chip from '../components/Chip';
+import EmblemOutline from '../components/EmblemOutline';
+import LinkLabel from '../components/LinkLabel';
+import { getNextProject, getProject, type Project } from '../content/projects';
+import { detail } from '../content/site';
+import { useDetailChoreo } from '../chapters/projects/detail';
+import { StateId } from '../field/states/ids';
+import { enterRoute } from '../scroll/director';
+import { store } from '../scroll/store';
 
+const TITLE_ID = 'project-title';
+
+/**
+ * /work/:slug (SPEC §6 "Project detail"), code-split.
+ *
+ * Field: director route mode with the pair locked to { this emblem, the next
+ * project's emblem }, anchored at (74vw, 40svh) × .8 on desktop and (50vw,
+ * 22svh) × .7 on mobile — the desktop copy keeps to the left 46vw and the
+ * mobile copy starts below a project field slot, so text and emblem never
+ * overlap. As the page scrolls the emblem rises and dims; MCP App's
+ * constellation re-stages over its spacer (scroll/detailField.ts).
+ *
+ * Motion (chapters/projects/detail.ts): the home → detail hand-off and the
+ * entry reveal ([data-d-line] line masks, [data-d-up] fade-ups at 350 ms)
+ * after an in-app transition, the figure's clip reveal
+ * ([data-detail-figure]), MCP App's spacer ([data-detail-stage]) and the
+ * "Next project" peek / commit (a[data-next-link]).
+ */
 export default function ProjectDetailPage() {
-  const { slug } = useParams<{ slug: string }>();
-
-  const projectIndex = sideProjects.findIndex((p) => p.slug === slug);
-  const project = sideProjects[projectIndex];
-  const nextProject = sideProjects[(projectIndex + 1) % sideProjects.length];
+  const { slug } = useParams();
+  const project = getProject(slug);
 
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: "instant" });
-  }, [slug]);
-
-  useEffect(() => {
-    if (project) {
-      document.title = `${project.title} — Stephen Webb`;
-    }
-    return () => {
-      document.title = "Stephen Webb — Senior Product Designer";
-    };
+    document.title = detail.documentTitle(project ? project.title : detail.notFound.title);
   }, [project]);
 
-  if (!project) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center">
-        <h1 className="font-display text-4xl md:text-5xl text-dark mb-4">
-          Project not found
-        </h1>
-        <p className="text-muted mb-8">
-          The project you're looking for doesn't exist.
-        </p>
-        <Link
-          to="/#work"
-          className="px-7 py-3 rounded-full bg-dark text-cream text-sm font-medium hover:bg-dark-soft transition-colors"
-        >
-          Back to Work
-        </Link>
-      </div>
-    );
-  }
+  // Route mode (§9.4): the pair is locked to this project's emblem (and the
+  // next one, for the peek); an unknown slug sits over S0.
+  useEffect(() => {
+    if (!slug || !project) {
+      enterRoute(store, 'detail', slug ?? '', { a: StateId.STATIC });
+      return;
+    }
+    enterRoute(store, 'detail', slug, { a: project.emblem, b: getNextProject(slug).emblem });
+  }, [slug, project]);
+
+  if (!project) return <ProjectNotFound />;
+  // Keyed: "Next project" mounts a fresh page (focus, scroll-driven hooks).
+  return <ProjectDetail key={project.slug} project={project} />;
+}
+
+function ProjectDetail({ project }: { project: Project }) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const navType = useNavigationType();
+  const navigate = useNavigate();
+  const next = getNextProject(project.slug);
+  useDetailChoreo(rootRef, project, navigate);
+
+  // In-app navigation lands focus on the title (tabIndex -1), so keyboard and
+  // screen reader users start at the top of the new page. Not on POP (first
+  // load, back/forward).
+  useEffect(() => {
+    if (navType !== 'POP') titleRef.current?.focus({ preventScroll: true });
+  }, [navType]);
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.4 }}
-    >
-      {/* ═══ HEADER ═══ */}
-      <section className="pt-32 md:pt-40 pb-20 md:pb-28 px-6 md:px-12">
-        <div className="max-w-4xl mx-auto">
-          <GSAPReveal>
+    <div ref={rootRef}>
+      <article
+        aria-labelledby={TITLE_ID}
+        data-project={project.slug}
+        data-emblem={project.emblem}
+        className="overflow-x-clip"
+      >
+        {/* ── Hero ─────────────────────────────────────────────────────── */}
+        <header className="relative px-gutter pt-[calc(4rem+10svh)] pb-[12svh] mobile:pt-0 mobile:pb-24 desktop:min-h-svh">
+          {/* The emblem (route mode, §6): centred at (74vw, 40svh) × .8 of the
+              card box on desktop, (50vw, 22svh) × .7 in the slot on mobile.
+              Hairline poster until the field draws the emblem. */}
+          <div aria-hidden="true" className="field-slot" data-slot="project">
+            <EmblemOutline emblem={project.emblem} className="absolute inset-[15%] size-[70%]" />
+          </div>
+          <EmblemOutline
+            emblem={project.emblem}
+            className="absolute top-[40svh] left-[74vw] h-[calc(var(--card-h)*0.8)] w-[calc(var(--card-w)*0.8)] -translate-1/2 mobile:hidden"
+          />
+          <div data-safe className="desktop:max-w-[46vw]">
             <Link
-              to="/#work"
-              className="group inline-flex items-center gap-2 text-sm font-medium text-muted hover:text-dark transition-colors mb-16"
+              to={detail.back.href}
+              data-d-up
+              className="link-line t-label gap-[0.6em] text-ink-2 hover:text-ink focus-visible:text-ink"
             >
-              <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-              Back to Work
+              <LinkLabel cta={detail.back} />
             </Link>
-          </GSAPReveal>
 
-          <GSAPReveal delay={0.05}>
-            <div className="flex flex-wrap gap-2 mb-8">
-              {project.tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="px-3 py-1 rounded-full text-xs font-medium text-orange border border-orange/20"
-                >
-                  {tag}
-                </span>
-              ))}
-            </div>
-          </GSAPReveal>
-
-          <GSAPReveal delay={0.1}>
-            <h1 className="font-display text-5xl md:text-7xl lg:text-8xl text-dark leading-[0.95] tracking-tight mb-6">
+            <p data-d-line className="t-label mt-[8svh] text-ember mobile:mt-10">
+              {project.indexLabel}
+            </p>
+            <h1
+              ref={titleRef}
+              id={TITLE_ID}
+              tabIndex={-1}
+              data-d-line
+              className="t-display-xl mt-4 text-balance text-ink"
+            >
               {project.title}
             </h1>
-          </GSAPReveal>
-
-          <GSAPReveal delay={0.15}>
-            <p className="text-lg md:text-xl text-muted leading-relaxed max-w-2xl mb-10">
+            <p data-d-up className="t-lede mt-8 max-w-[36ch] text-ink-2">
               {project.description}
             </p>
-          </GSAPReveal>
 
-          <GSAPReveal delay={0.2}>
-            <div className="flex flex-wrap gap-3">
+            <ul data-d-up className="mt-8 flex flex-wrap gap-2">
+              {project.tags.map((tag) => (
+                <Chip key={tag} as="li">
+                  {tag}
+                </Chip>
+              ))}
+            </ul>
+
+            <div data-d-up className="mt-10 flex flex-wrap gap-3 mobile:flex-col">
               {project.liveUrl && (
                 <a
                   href={project.liveUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="group inline-flex items-center gap-2 px-6 py-3 rounded-full bg-dark text-cream text-sm font-medium hover:bg-dark-soft transition-colors"
+                  data-cursor="live"
+                  className="btn btn-ember mobile:w-full"
                 >
-                  <ExternalLink className="w-4 h-4" />
-                  View Live
-                  <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                  <LinkLabel cta={detail.viewLive} />
                 </a>
               )}
               <a
                 href={project.githubUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="group inline-flex items-center gap-2 px-6 py-3 rounded-full border border-dark/15 text-dark text-sm font-medium hover:border-dark/40 transition-colors"
+                className="btn btn-line mobile:w-full"
               >
-                <Github className="w-4 h-4" />
-                View on GitHub
-                <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                <LinkLabel cta={detail.viewGithub} />
               </a>
             </div>
-          </GSAPReveal>
-        </div>
-      </section>
-
-      {/* ═══ SCREENSHOT ═══ */}
-      <section className="px-6 md:px-12 pb-20 md:pb-28">
-        <GSAPReveal>
-          <div className="max-w-5xl mx-auto">
-            {project.screenshot ? (
-              <img
-                src={project.screenshot}
-                alt={`${project.title} screenshot`}
-                loading="lazy"
-                decoding="async"
-                className="rounded-2xl w-full shadow-lg"
-              />
-            ) : (
-              <div className="rounded-2xl border border-dashed border-dark/10 bg-cream-dark aspect-video flex flex-col items-center justify-center gap-4">
-                <ImageIcon className="w-10 h-10 text-muted/40" strokeWidth={1} />
-                <p className="text-sm text-muted/60">Screenshot coming soon</p>
-              </div>
-            )}
           </div>
-        </GSAPReveal>
-      </section>
+        </header>
 
-      {/* ═══ WRITEUP ═══ */}
-      <section className="px-6 md:px-12 pb-32 md:pb-40">
-        <div className="max-w-3xl mx-auto">
-          <GSAPReveal>
-            <SectionLabel className="mb-12">About This Project</SectionLabel>
-          </GSAPReveal>
-
-          <div className="space-y-8">
-            {project.writeup.map((paragraph, i) => (
-              <GSAPReveal key={i} delay={0.05 + i * 0.06}>
-                <p className="text-muted leading-[1.9] text-[16px]">
-                  {paragraph}
-                </p>
-              </GSAPReveal>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ═══ NEXT PROJECT ═══ */}
-      {nextProject && (
-        <section className="border-t border-line">
-          <Link
-            to={`/work/${nextProject.slug}`}
-            className="group block px-6 md:px-12 py-20 md:py-28 hover:bg-cream-dark transition-colors duration-500"
+        {/* ── Figure ───────────────────────────────────────────────────── */}
+        {project.screenshot ? (
+          <figure
+            data-detail-figure=""
+            className="mx-auto w-[min(1100px,88vw)] overflow-hidden rounded-media border border-line bg-surface"
           >
-            <div className="max-w-4xl mx-auto flex items-center justify-between">
-              <div>
-                <p className="text-xs font-medium tracking-[0.2em] uppercase text-muted mb-4">
-                  Next Project
-                </p>
-                <h3 className="font-display text-3xl md:text-4xl text-dark">
-                  {nextProject.title}
-                </h3>
-              </div>
-              <ArrowUpRight className="w-8 h-8 text-orange opacity-50 group-hover:opacity-100 group-hover:translate-x-1 group-hover:-translate-y-1 transition-all" />
+            <img
+              src={project.screenshot.src}
+              width={project.screenshot.width}
+              height={project.screenshot.height}
+              alt={`${project.title} screenshot`}
+              loading="lazy"
+              decoding="async"
+              className="block h-auto w-full"
+            />
+          </figure>
+        ) : (
+          // MCP App: no screenshot. A 100svh aria-hidden stage the
+          // constellation re-staging to the centre (× 1.3) fills, captioned.
+          <div className="relative">
+            <div aria-hidden="true" data-detail-stage="" className="h-svh" />
+            <EmblemOutline
+              emblem={project.emblem}
+              className="absolute top-[46%] left-1/2 h-[min(calc(var(--card-h)*1.3),70svh)] w-[min(calc(var(--card-w)*1.3),calc(100%-2*var(--gutter)))] -translate-1/2"
+            />
+            <div className="absolute inset-x-0 bottom-[12svh] flex justify-center px-gutter">
+              <p data-safe className="t-label text-ink-2">
+                {detail.screenshotSoon}
+              </p>
             </div>
-          </Link>
+          </div>
+        )}
+
+        {/* ── Writeup ──────────────────────────────────────────────────── */}
+        <section
+          aria-labelledby="project-about-title"
+          className="px-gutter pt-[22svh] pb-[18svh] mobile:pt-28 mobile:pb-24"
+        >
+          <div className="grid grid-cols-12 items-baseline gap-x-col-gap gap-y-8">
+            <h2
+              id="project-about-title"
+              className="t-label col-span-12 text-ember desktop:col-span-3"
+            >
+              {detail.aboutHeading}
+            </h2>
+            <div data-safe data-cursor="text" className="col-span-12 w-fit max-w-full desktop:col-span-8 desktop:col-start-4">
+              <p className="t-lede max-w-[40ch] text-ink">{project.writeup[0]}</p>
+              <p className="t-body mt-10 text-ink-2">{project.writeup[1]}</p>
+              <p className="t-body mt-6 text-ink-2">{project.writeup[2]}</p>
+            </div>
+          </div>
         </section>
-      )}
-    </motion.div>
+      </article>
+
+      {/* ── Next project ───────────────────────────────────────────────── */}
+      <nav aria-labelledby="next-project-title" className="overflow-x-clip border-t border-line px-gutter">
+        <div data-safe className="relative py-[9svh] mobile:py-14">
+          <h2 id="next-project-title" className="t-label text-ember">
+            {detail.nextHeading}
+          </h2>
+          <Link
+            to={`/work/${next.slug}`}
+            data-cursor="open"
+            data-next-link
+            data-next-emblem={next.emblem}
+            className="mt-5 flex items-center justify-between gap-6 text-ink transition-colors duration-240 ease-ui after:absolute after:inset-0 hover:text-ember focus-visible:text-ember"
+          >
+            <span className="t-display-l">{next.title}</span>
+            <ArrowRight aria-hidden="true" strokeWidth={1.5} className="size-9 shrink-0 desktop:size-14" />
+          </Link>
+        </div>
+      </nav>
+    </div>
+  );
+}
+
+/** Unknown slug (§6): over S0, text at 24svh. */
+function ProjectNotFound() {
+  return (
+    <section aria-labelledby={TITLE_ID} className="relative min-h-svh overflow-x-clip px-gutter pt-[24svh] pb-[20svh]">
+      <div data-safe className="w-fit max-w-full">
+        <h1 id={TITLE_ID} tabIndex={-1} className="t-title text-balance text-ink">
+          {detail.notFound.title}
+        </h1>
+        <p className="t-body mt-6 max-w-[40ch] text-ink-2">{detail.notFound.body}</p>
+        <Link to={detail.notFound.back.href} className="btn btn-line mt-10 mobile:w-full">
+          <LinkLabel cta={detail.notFound.back} />
+        </Link>
+      </div>
+    </section>
   );
 }

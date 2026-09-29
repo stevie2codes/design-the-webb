@@ -1,0 +1,4 @@
+# Unknown project slugs get the prerendered "Project not found" page (status 404),
+# the same page the SPA renders, so JS on and off match (SPEC §6, §8.4).
+# Not forced: the real work/<slug>.html files still win (pretty URLs).
+/work/*  /work/404.html  404
