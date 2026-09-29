@@ -17,8 +17,8 @@ import { CHART } from '../field/layout';
  *   and the visually hidden <table> (Stat | Value | Note), which is what
  *   assistive tech reads. Desktop: the figure is position: static, so the
  *   plot and the anchor are positioned against the About stage (x 54 → 92vw,
- *   baseline 80svh, 1 yr = 52svh / 7); keep it untransformed there, or it
- *   becomes their containing block. Mobile: the figure is relative and is
+ *   baseline min(80svh, 100svh − 180px), 1 yr = 52svh / 7); keep it
+ *   untransformed there, or it becomes their containing block. Mobile: the figure is relative and is
  *   the field slot (52svh); the plot sits over it (anchor coordinates are
  *   slot-relative there). About orders it first on mobile.
  * - <CareerStats>: the visible stat blocks (value, label, note), aria-hidden
@@ -47,7 +47,8 @@ import { CHART } from '../field/layout';
  * Put on the About stage: the gap between the baseline and the stat row
  * (read by the leader in the figure and by the stat row beside it).
  */
-export const CHART_STAGE_VARS = '[--label-gap:24px] max-[1200px]:[--label-gap:14px] low:[--label-gap:14px]';
+export const CHART_STAGE_VARS =
+  '[--label-gap:24px] max-[1200px]:[--label-gap:14px] low:[--label-gap:14px] desktop:short:[--label-gap:44px]!';
 
 type Swatch = 'steel' | 'signal';
 
@@ -161,13 +162,16 @@ const SWATCH_DOTS: Readonly<Record<Swatch, string>> = {
  * The key for the steel (developer years) and bone (design years) fills.
  * Desktop: top-left inside the plot, clear of the bars and numerals (all
  * three bars use these two fills). Mobile: under the baseline, in the slot.
+ * Short landscape phones (desktop layout, height < 600): the 52svh plot is
+ * ~200px tall and the 4+ numeral lands on the legend, so it moves under the
+ * baseline too, and the stat list below makes room for it (--label-gap).
  */
 function Legend() {
   return (
     <ul
       aria-hidden="true"
       data-legend
-      className="absolute top-[calc(100%+18px)] left-0 flex gap-x-5 gap-y-2 desktop:top-3 desktop:left-4 desktop:flex-col"
+      className="absolute top-[calc(100%+18px)] left-0 flex gap-x-5 gap-y-2 desktop:top-3 desktop:left-4 desktop:flex-col desktop:short:top-[calc(100%+12px)] desktop:short:left-0 desktop:short:flex-row"
     >
       {chart.legend.map((item) => (
         <li key={item.label} className="t-label flex items-center gap-2 whitespace-nowrap text-ink-2">

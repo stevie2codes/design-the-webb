@@ -84,7 +84,7 @@ export default function Hero() {
           the name is tall for the viewport. Mobile: box bottom 12px above
           the name block (≈14svh at 390×844), clear of the 80px nav band. */}
       <p
-        data-safe
+        data-safe="tight"
         className="t-label absolute left-gutter top-[calc(min(41svh,var(--anchor-name-y)-24px)+0.34em)] -translate-y-full whitespace-nowrap text-ink-2 mobile:top-[calc(var(--anchor-name-y)-12px)] mobile:right-gutter mobile:whitespace-normal"
       >
         {company ? (
@@ -117,19 +117,22 @@ export default function Hero() {
           desktop 70svh → 81svh + 48px; mobile 44svh → 58svh + two 48px
           buttons. When the lede is taller than the gap, gap-* takes over. */}
       <div
-        data-safe
+        data-safe="tight"
         className="absolute left-gutter top-[70svh] flex min-h-[calc(11svh+48px)] flex-col justify-between gap-6 mobile:right-gutter mobile:top-[max(44svh,calc(var(--anchor-name-y)+var(--name-fs)*1.72+28px))] mobile:min-h-[calc(14svh+108px)] mobile:gap-8"
       >
         <p data-cursor="text" className="t-display-m text-ink desktop:whitespace-nowrap">
           {hero.lede.lead} <span className="t-accent mobile:block">{hero.lede.accent}</span>
         </p>
-        <div className="flex items-center gap-x-9 mobile:flex-col mobile:items-stretch mobile:gap-y-3">
+        {/* Phones: stacked, the primary full width (§5 C0 mobile). Portrait
+            tablets (mobile layout, ≥ 600px wide): a 750px pill is a slab, so
+            the pair sits in a row as on desktop. */}
+        <div className="flex items-center gap-x-9 mobile:flex-col mobile:items-stretch mobile:gap-y-3 mobile:min-[600px]:flex-row mobile:min-[600px]:items-center">
           {/* In-page jumps: a plain click lands on the chapter's hold start with
               focus on its <h2> (§4.4), like the nav; the href is the no-JS path. */}
           <a
             href={hero.ctaPrimary.href}
             onClick={onJumpLinkClick}
-            className="btn btn-ember mobile:w-full"
+            className="btn btn-ember mobile:w-full mobile:min-[600px]:w-auto"
           >
             <LinkLabel cta={hero.ctaPrimary} />
           </a>

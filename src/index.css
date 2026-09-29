@@ -62,20 +62,22 @@
 @custom-variant rm (&:where(.rm, .rm *));
 @custom-variant field-live (&:where([data-field="live"], [data-field="live"] *));
 @custom-variant no-field (&:where(html:not([data-field="live"]), html:not([data-field="live"]) *));
-/* Per state: the live field is drawing state k (the engine lists the resident
-   ids in html[data-field-states]). DOM stand-ins for a state — the chart's
-   SVG bars, the NDA slabs, emblem outlines, the stack plates, the beacon
-   shell, the 404 flatline — hide only once THEIR state draws, so a state
-   whose generator has not landed yet never leaves a hole. */
-@custom-variant field-s2 (&:where([data-field="live"][data-field-states~="2"], [data-field="live"][data-field-states~="2"] *));
-@custom-variant field-s3 (&:where([data-field="live"][data-field-states~="3"], [data-field="live"][data-field-states~="3"] *));
-@custom-variant field-s4 (&:where([data-field="live"][data-field-states~="4"], [data-field="live"][data-field-states~="4"] *));
-@custom-variant field-s5 (&:where([data-field="live"][data-field-states~="5"], [data-field="live"][data-field-states~="5"] *));
-@custom-variant field-s6 (&:where([data-field="live"][data-field-states~="6"], [data-field="live"][data-field-states~="6"] *));
-@custom-variant field-s7 (&:where([data-field="live"][data-field-states~="7"], [data-field="live"][data-field-states~="7"] *));
-@custom-variant field-s8 (&:where([data-field="live"][data-field-states~="8"], [data-field="live"][data-field-states~="8"] *));
-@custom-variant field-s9 (&:where([data-field="live"][data-field-states~="9"], [data-field="live"][data-field-states~="9"] *));
-@custom-variant no-field-s10 (&:where(html:not([data-field="live"][data-field-states~="10"]), html:not([data-field="live"][data-field-states~="10"]) *));
+/* Per state: the field — WebGL ("live") or the Canvas2D fallback — is
+   drawing state k (each lists its resident ids in html[data-field-states];
+   the fallback never lists 2, §8.4 keeps the chart's SVG bars). DOM
+   stand-ins for a state — the chart's SVG bars, the NDA slabs, emblem
+   outlines, the stack plates, the beacon shell, the 404 flatline — hide only
+   once THEIR state draws, so a state whose generator has not landed yet
+   never leaves a hole, and a drawn state is never doubled by its stand-in. */
+@custom-variant field-s2 (&:where(:is([data-field="live"], [data-field="fallback"])[data-field-states~="2"], :is([data-field="live"], [data-field="fallback"])[data-field-states~="2"] *));
+@custom-variant field-s3 (&:where(:is([data-field="live"], [data-field="fallback"])[data-field-states~="3"], :is([data-field="live"], [data-field="fallback"])[data-field-states~="3"] *));
+@custom-variant field-s4 (&:where(:is([data-field="live"], [data-field="fallback"])[data-field-states~="4"], :is([data-field="live"], [data-field="fallback"])[data-field-states~="4"] *));
+@custom-variant field-s5 (&:where(:is([data-field="live"], [data-field="fallback"])[data-field-states~="5"], :is([data-field="live"], [data-field="fallback"])[data-field-states~="5"] *));
+@custom-variant field-s6 (&:where(:is([data-field="live"], [data-field="fallback"])[data-field-states~="6"], :is([data-field="live"], [data-field="fallback"])[data-field-states~="6"] *));
+@custom-variant field-s7 (&:where(:is([data-field="live"], [data-field="fallback"])[data-field-states~="7"], :is([data-field="live"], [data-field="fallback"])[data-field-states~="7"] *));
+@custom-variant field-s8 (&:where(:is([data-field="live"], [data-field="fallback"])[data-field-states~="8"], :is([data-field="live"], [data-field="fallback"])[data-field-states~="8"] *));
+@custom-variant field-s9 (&:where(:is([data-field="live"], [data-field="fallback"])[data-field-states~="9"], :is([data-field="live"], [data-field="fallback"])[data-field-states~="9"] *));
+@custom-variant no-field-s10 (&:where(html:not(:is([data-field="live"], [data-field="fallback"])[data-field-states~="10"]), html:not(:is([data-field="live"], [data-field="fallback"])[data-field-states~="10"]) *));
 /* The §6 intro is expected or running: html[data-intro="pending"] (the
    pre-paint script's guess, until the engine decides) or "running" (engine). */
 @custom-variant intro (&:where([data-intro], [data-intro] *));
@@ -118,9 +120,9 @@
   --color-core: #ffe2cf; /* beacon CTA disc */
   --color-steel: #8c97ad; /* chart legend swatch (non-text), particle steel */
 
-  --font-sans: "Archivo Variable", ui-sans-serif, system-ui, sans-serif;
-  --font-serif: "Instrument Serif", ui-serif, Georgia, serif;
-  --font-mono: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-sans: "Archivo Variable", "Archivo Fallback", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Instrument Serif", "Instrument Serif Fallback", ui-serif, Georgia, serif;
+  --font-mono: "JetBrains Mono Variable", "JetBrains Mono Fallback", ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --ease-cine: cubic-bezier(0.7, 0, 0.2, 1);
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
@@ -157,6 +159,70 @@
 }
 
 /* ─── Base ──────────────────────────────────────────────────────────────── */
+/* Metric-matched fallback faces (§8.5 CLS 0): until Archivo, Instrument Serif
+   and JetBrains Mono swap in, local Times / Courier metrics are scaled to theirs, so
+   the swap changes glyph shapes, not widths or line boxes. Measured in
+   Chromium at 100px: Archivo 400 advance 0.99 × Arial, 600 0.95 × Arial Bold,
+   800 at 75% width 0.8065 × Arial Bold; ascent .88 / descent .21;
+   Instrument Serif italic advance 0.8794 × Times italic,
+   ascent .99 / descent .31; JetBrains Mono advance = Courier (.6em), ascent
+   1.02 / descent .30. (@font-face is not a style rule: layers do not apply.) */
+@font-face {
+  font-family: "Archivo Fallback";
+  font-style: normal;
+  font-weight: 100 549;
+  font-stretch: 100%;
+  src: local("Arial"), local("ArialMT"), local("Liberation Sans"), local("LiberationSans");
+  size-adjust: 99%;
+  ascent-override: 88.9%;
+  descent-override: 21.2%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Archivo Fallback";
+  font-style: normal;
+  font-weight: 550 900;
+  font-stretch: 100%;
+  src: local("Arial Bold"), local("Arial-BoldMT"), local("Liberation Sans Bold"), local("LiberationSans-Bold");
+  size-adjust: 95%;
+  ascent-override: 92.6%;
+  descent-override: 22.1%;
+  line-gap-override: 0%;
+}
+/* The h1 (.t-name: 800 at 75% width): Arial Bold scaled to Archivo's condensed advance. */
+@font-face {
+  font-family: "Archivo Fallback";
+  font-style: normal;
+  font-weight: 550 900;
+  font-stretch: 75%;
+  src: local("Arial Bold"), local("Arial-BoldMT"), local("Liberation Sans Bold"), local("LiberationSans-Bold");
+  size-adjust: 80.65%;
+  ascent-override: 109.1%;
+  descent-override: 26.3%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Instrument Serif Fallback";
+  font-style: italic;
+  font-weight: 400;
+  src: local("Times New Roman Italic"), local("TimesNewRomanPS-ItalicMT"), local("Times Italic"),
+    local("Liberation Serif Italic"), local("LiberationSerif-Italic");
+  size-adjust: 87.94%;
+  ascent-override: 112.6%;
+  descent-override: 35.3%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "JetBrains Mono Fallback";
+  font-style: normal;
+  font-weight: 100 800;
+  src: local("Courier New"), local("CourierNewPSMT"), local("Liberation Mono"), local("LiberationMono");
+  size-adjust: 100%;
+  ascent-override: 102%;
+  descent-override: 30%;
+  line-gap-override: 0%;
+}
+
 @layer base {
   /* Layout variables: gutters, name size, card box, mobile slot heights and
      every field anchor box (--anchor-<state>-x|y|w|h[-extra]).
@@ -181,10 +247,10 @@
     --anchor-name-w: calc(var(--name-fs) * 6.518);
     --anchor-name-h: calc(var(--name-fs) * 0.69);
     --anchor-chart-x: 54vw;
-    --anchor-chart-y: 28svh;
+    --anchor-chart-y: calc(min(80svh, 100svh - 180px) - 52svh);
     --anchor-chart-w: 38vw;
     --anchor-chart-h: 52svh;
-    --anchor-chart-baseline: 80svh;
+    --anchor-chart-baseline: min(80svh, 100svh - 180px);
     --anchor-redacted-x: 54vw;
     --anchor-redacted-y: 23.75svh;
     --anchor-redacted-w: 38vw;
@@ -286,6 +352,12 @@
         --anchor-stack-y: 1svh;
         --anchor-stack-w: 67.2vw;
         --anchor-stack-h: 32svh;
+        --anchor-beacon-x: 30.8vw;
+        --anchor-beacon-y: calc(44svh - 19.2vw);
+        --anchor-beacon-w: 38.4vw;
+        --anchor-beacon-h: 38.4vw;
+        --anchor-beacon-cy: 44svh;
+        --anchor-beacon-r: 19.2vw;
       }
     }
   }
@@ -638,13 +710,14 @@
 
   /* ── Text-safe scrim (§2.3) ────────────────────────────────────────────────
      Every text block over the field carries [data-safe]: a void scrim 48px
-     beyond the block, feathered on all four edges. The field also dims
+     (sides) / 80px (top, bottom; 48px for data-safe="tight") beyond the
+     block, feathered on all four edges. The field also dims
      particles inside these rects (text-safe mask). .scrim is an alias.
      - The 48px feather is an eased (smootherstep) ramp, not a linear one: a
        linear ramp starts and stops abruptly (Mach bands), and together with
        the shader mask's ramp it read as a hard dark box cut into the field
-       (CONTRACTS.md tuning notes). It is not wider: the hero eyebrow sits
-       20–50px above the name's cap line.
+       (CONTRACTS.md tuning notes). The hero blocks beside the name are
+       data-safe="tight" (48px): the eyebrow sits 20–50px above its cap line.
      - No `isolation`: every ::before (z −1) drops into the stacking context
        of <main> (relative z-2), so all scrims paint beneath all text and
        above the canvas; a later block's scrim can never dim earlier text.
@@ -659,20 +732,38 @@
   }
   [data-safe]::before,
   .scrim::before {
-    /* smootherstep(t) at t = 0, 1/8 … 1, over 48px from each edge */
+    /* smootherstep(t) at t = 0, 1/8 … 1, over --sf from each edge: 48px
+       across (bounded by the page gutter), --sfy (80px) top and bottom */
+    --sf: 48px;
+    --sfy: 80px;
     --scrim-in:
-      transparent, rgb(0 0 0 / 0.011) 6px, rgb(0 0 0 / 0.104) 12px, rgb(0 0 0 / 0.262) 18px,
-      rgb(0 0 0 / 0.5) 24px, rgb(0 0 0 / 0.738) 30px, rgb(0 0 0 / 0.896) 36px, rgb(0 0 0 / 0.989) 42px, #000 48px;
+      transparent, rgb(0 0 0 / 0.011) calc(var(--sf) * 0.125), rgb(0 0 0 / 0.104) calc(var(--sf) * 0.25),
+      rgb(0 0 0 / 0.262) calc(var(--sf) * 0.375), rgb(0 0 0 / 0.5) calc(var(--sf) * 0.5),
+      rgb(0 0 0 / 0.738) calc(var(--sf) * 0.625), rgb(0 0 0 / 0.896) calc(var(--sf) * 0.75),
+      rgb(0 0 0 / 0.989) calc(var(--sf) * 0.875), #000 var(--sf);
     --scrim-out:
-      #000 calc(100% - 48px), rgb(0 0 0 / 0.989) calc(100% - 42px), rgb(0 0 0 / 0.896) calc(100% - 36px),
-      rgb(0 0 0 / 0.738) calc(100% - 30px), rgb(0 0 0 / 0.5) calc(100% - 24px), rgb(0 0 0 / 0.262) calc(100% - 18px),
-      rgb(0 0 0 / 0.104) calc(100% - 12px), rgb(0 0 0 / 0.011) calc(100% - 6px), transparent;
+      #000 calc(100% - var(--sf)), rgb(0 0 0 / 0.989) calc(100% - var(--sf) * 0.875),
+      rgb(0 0 0 / 0.896) calc(100% - var(--sf) * 0.75), rgb(0 0 0 / 0.738) calc(100% - var(--sf) * 0.625),
+      rgb(0 0 0 / 0.5) calc(100% - var(--sf) * 0.5), rgb(0 0 0 / 0.262) calc(100% - var(--sf) * 0.375),
+      rgb(0 0 0 / 0.104) calc(100% - var(--sf) * 0.25), rgb(0 0 0 / 0.011) calc(100% - var(--sf) * 0.125), transparent;
+    --scrim-in-y:
+      transparent, rgb(0 0 0 / 0.011) calc(var(--sfy) * 0.125), rgb(0 0 0 / 0.104) calc(var(--sfy) * 0.25),
+      rgb(0 0 0 / 0.262) calc(var(--sfy) * 0.375), rgb(0 0 0 / 0.5) calc(var(--sfy) * 0.5),
+      rgb(0 0 0 / 0.738) calc(var(--sfy) * 0.625), rgb(0 0 0 / 0.896) calc(var(--sfy) * 0.75),
+      rgb(0 0 0 / 0.989) calc(var(--sfy) * 0.875), #000 var(--sfy);
+    --scrim-out-y:
+      #000 calc(100% - var(--sfy)), rgb(0 0 0 / 0.989) calc(100% - var(--sfy) * 0.875),
+      rgb(0 0 0 / 0.896) calc(100% - var(--sfy) * 0.75), rgb(0 0 0 / 0.738) calc(100% - var(--sfy) * 0.625),
+      rgb(0 0 0 / 0.5) calc(100% - var(--sfy) * 0.5), rgb(0 0 0 / 0.262) calc(100% - var(--sfy) * 0.375),
+      rgb(0 0 0 / 0.104) calc(100% - var(--sfy) * 0.25), rgb(0 0 0 / 0.011) calc(100% - var(--sfy) * 0.125), transparent;
     content: "";
     position: absolute;
-    inset: -48px max(-48px, calc(-1 * var(--gutter)));
+    inset: calc(-1 * var(--sfy)) max(calc(-1 * var(--sf)), calc(-1 * var(--gutter)));
     z-index: -1;
     pointer-events: none;
     background-color: rgb(5 5 7 / 0.82);
+    /* Rounded, so the intersected ramps meet in a soft corner, not a mitre. */
+    border-radius: var(--sfy);
     /* --scrim: a block's text reveal can scrub its scrim in with it (the C3
        panels, chapters/projects/stage.ts), so no empty dark box shows before
        the text does. */
@@ -680,12 +771,17 @@
     transition: opacity 300ms var(--ease-ui);
     -webkit-mask-image:
       linear-gradient(to right, var(--scrim-in), var(--scrim-out)),
-      linear-gradient(to bottom, var(--scrim-in), var(--scrim-out));
+      linear-gradient(to bottom, var(--scrim-in-y), var(--scrim-out-y));
     -webkit-mask-composite: source-in;
     mask-image:
       linear-gradient(to right, var(--scrim-in), var(--scrim-out)),
-      linear-gradient(to bottom, var(--scrim-in), var(--scrim-out));
+      linear-gradient(to bottom, var(--scrim-in-y), var(--scrim-out-y));
     mask-composite: intersect;
+  }
+  /* The hero blocks beside the S1 name keep the narrow 48px ramp (the
+     eyebrow sits 20–50px above the name's cap line). */
+  [data-safe="tight"]::before {
+    --sfy: 48px;
   }
   html:not([data-field]) [data-safe]::before,
   html:not([data-field]) .scrim::before {

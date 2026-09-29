@@ -77,7 +77,8 @@ function Wordmark() {
 /**
  * Fixed nav (SPEC §6): 64px (56px mobile), never hides. Wordmark → "/";
  * desktop chapter links with an active dot and the Email pill; a Menu button
- * opens the mobile overlay. Chapter links jump in place on home with the
+ * opens the mobile overlay (with JS off on mobile, a second row of chapter
+ * links instead). Chapter links jump in place on home with the
  * §4.4 policy (glide within 2 film states, else a jump cut) and navigate to
  * /#id elsewhere.
  *
@@ -216,7 +217,7 @@ export default function Nav() {
 
   return (
     <>
-      <header ref={headerRef} className="group/nav fixed inset-x-0 top-0 z-40">
+      <header ref={headerRef} className="group/nav fixed inset-x-0 top-0 z-40 nojs:mobile:relative">
         <div
           aria-hidden="true"
           className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-24 mobile:h-20 bg-linear-to-b from-void from-85% to-transparent opacity-0 transition-opacity duration-240 ease-ui group-data-[scrolled]/nav:opacity-100"
@@ -226,7 +227,7 @@ export default function Nav() {
             to="/"
             aria-label={nav.wordmark}
             onClick={(e) => onChapterClick(e, 'top')}
-            className="t-label -mx-2 inline-flex min-h-11 items-center px-2 text-ink"
+            className="t-label -mx-2 inline-flex min-h-11 min-w-11 items-center px-2 text-ink"
           >
             <Wordmark />
           </Link>
@@ -268,6 +269,18 @@ export default function Nav() {
             <Menu aria-hidden="true" size={16} strokeWidth={1.5} />
           </button>
         </nav>
+        {/* No JS on the mobile layout: the Menu overlay needs JS, so the chapter
+            links sit on a second row, and the header is in flow (it takes its
+            space above the hero and scrolls away with the page). */}
+        <ul className="hidden flex-wrap gap-x-4 px-gutter nojs:mobile:flex">
+          {nav.items.map((item) => (
+            <li key={item.id}>
+              <a href={`/#${item.id}`} className="t-label inline-flex min-h-11 min-w-11 items-center justify-center text-ink hover:text-ember focus-visible:text-ember">
+                {item.label}
+              </a>
+            </li>
+          ))}
+        </ul>
       </header>
 
       <MobileMenu

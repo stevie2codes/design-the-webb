@@ -29,7 +29,10 @@
  *   share a window are staggered together (.05).
  * - `data-reveal-window="from,to"`: another window, in % of the viewport
  *   (e.g. "40,5" for the C4 rows, "75,35" for the NDA text).
- * - `data-reveal-timed`: time-based (700 ms, once) instead of scrubbed.
+ * - `data-reveal-timed`: time-based (700 ms, 90 ms stagger) instead of
+ *   scrubbed: line masks play when the window starts and reverse when the
+ *   scroll comes back above it (the chapter statements: a scrubbed mask left
+ *   sliced glyphs on screen whenever the visitor paused); fade-ups play once.
  * In flow (mobile, fit-guard fallback) the window is the element's own top
  * moving from 92% to 70%, since the section top says little about a block
  * deep in a long flow chapter.
@@ -117,7 +120,7 @@ function autoReveals(ctx: ChapterContext): void {
     const timed = el.hasAttribute('data-reveal-timed');
     if (kind === 'lines') {
       const [from, to] = parseWindow(el.dataset.revealWindow, REVEAL_WINDOWS.lines);
-      ctx.track(lineMask(el, { window: ctx.window(el, from, to), scrub: !timed }));
+      ctx.track(lineMask(el, { window: ctx.window(el, from, to), scrub: !timed, reverse: timed }));
     } else if (kind === 'up') {
       const [from, to] = parseWindow(el.dataset.revealWindow, REVEAL_WINDOWS.up);
       const key = `${from},${to},${timed}`;

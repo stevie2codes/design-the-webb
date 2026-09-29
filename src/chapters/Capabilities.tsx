@@ -213,6 +213,7 @@ export default function Capabilities() {
           <ChapterHeading heading={capabilities.heading} id={titleId} />
           <p
             data-reveal="lines"
+            data-reveal-timed
             className={`t-display-l mt-5 text-balance text-ink staged:mt-[clamp(12px,2svh,24px)] ${STATEMENT_FS}`}
           >
             {capabilities.statement.lead} <span className="t-accent">{capabilities.statement.accent}</span>

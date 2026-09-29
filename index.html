@@ -13,9 +13,9 @@
       //  - data-layout: the mobile rule (keep in sync with MQ.mobile in
       //    src/field/layout.ts and the `mobile` variant in src/index.css)
       //  - data-intro="pending": the §6 intro will probably run (full motion,
-      //    home, no ?intro=0 / ?film=, no forced colors; the page always opens
-      //    at the top). The scroll cue waits and the HUD reads 1.00 until the
-      //    engine runs the intro ("running") or drops the guess; a CSS
+      //    home, no ?intro=0 / ?film=, no deep-link #hash, no forced colors;
+      //    the page always opens at the top). The scroll cue waits and the
+      //    HUD reads 1.00 until the engine runs the intro ("running") or drops the guess; a CSS
       //    failsafe shows the cue after 4 s if nothing ever answers.
       (function () {
         var d = document.documentElement;
@@ -35,7 +35,8 @@
         try { forced = matchMedia('(forced-colors: active)').matches; } catch (e) {}
         var film = /[?&]film=\s*-?[\d.]/.test(q);
         var introOff = /[?&]intro=(0|false|off)(&|$)/i.test(q);
-        if (!d.classList.contains('rm') && !forced && !film && !introOff && location.pathname === '/') {
+        var deepLink = location.hash.length > 1;
+        if (!d.classList.contains('rm') && !forced && !film && !introOff && !deepLink && location.pathname === '/') {
           d.setAttribute('data-intro', 'pending');
         }
       })();
@@ -48,18 +49,29 @@
     <meta property="og:description" content="I design products where data meets decisions. Senior Product Designer at Tyler Technologies." />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://designthewebb.com" />
+    <meta property="og:site_name" content="designthewebb.com" />
     <meta property="og:image" content="https://designthewebb.com/og-image.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Stephen Webb — Senior Product Designer. I make complex data feel obvious." />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Stephen Webb — Senior Product Designer" />
     <meta name="twitter:description" content="I design products where data meets decisions." />
+    <meta name="twitter:image" content="https://designthewebb.com/og-image.png" />
+    <meta name="twitter:image:alt" content="Stephen Webb — Senior Product Designer. I make complex data feel obvious." />
     <title>Stephen Webb — Senior Product Designer</title>
   </head>
   <body>
     <div id="root"></div>
     <script>
-      // Prevent browser from restoring scroll position or scrolling to hash on reload
+      // No browser scroll restoration and no native fragment jump on load:
+      // the page opens at the top (the hero paints first). A deep link's
+      // hash is kept in window.__dtwHash; the app jumps to it after the
+      // first layout refresh and puts it back (src/scroll/initialHash.ts).
       if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
-      if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+      window.__dtwHash = location.hash;
+      if (location.hash) history.replaceState(history.state, '', location.pathname + location.search);
       scrollTo(0, 0);
     </script>
     <script type="module" src="/src/main.tsx"></script>

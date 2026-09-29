@@ -11,8 +11,8 @@
  * 1. The detail anchor — (74vw, 40svh) × .8 on desktop, (50vw, 22svh) × .7
  *    on mobile (layout.ts DETAIL_ANCHOR).
  * 2. Scroll parallax: as the page scrolls 0 → 100svh the emblem rises .3 su
- *    (.15·H px: 1 su = H/2 px) and dims to α .25, so the writeup sits over
- *    near-void. `detailFx.restore` (0 → 1 while "Next project" commits)
+ *    (.15·H px: 1 su = H/2 px); it dims to α .25 by 60svh and to .12 by
+ *    120svh, so the writeup sits over near-void. `detailFx.restore` (0 → 1 while "Next project" commits)
  *    brings it back to rest, so the next page — which opens at y 0 — starts
  *    exactly where the commit left it.
  *    Reduced motion (§8.2): no parallax; the emblem is registered to the
@@ -41,8 +41,16 @@ import type { FieldStore, Vec4 } from './store.ts';
 export const DETAIL_FIELD = {
   /** Rise over the first 100svh of scroll, in px per px of H (.3 su = .15·H). */
   parallax: 0.15,
-  /** α after the first 100svh of scroll. */
+  /**
+   * α .25 after the first `dimBy` of scroll, then `farTo` by `farBy` (tuned,
+   * final review: at 100svh → .25 the emblem stayed bright beside the
+   * screenshot figure and the lede, and its ember highlight still read
+   * beside the writeup).
+   */
   dimTo: 0.25,
+  dimBy: 0.6,
+  farTo: 0.12,
+  farBy: 1.2,
   /** Home → detail anchor tween (§6 step 4), seconds, expo.inOut. */
   handoffS: 0.7,
   /**
@@ -98,9 +106,13 @@ export function detailAnchorTransform(id: StateId, s: FieldStore, out: Vec4): Ve
     y = cy - sy;
     alpha = 1;
   } else {
-    const t = H > 0 ? clamp01(sy / H) * (1 - detailFx.restore) : 0;
+    const keep = 1 - detailFx.restore;
+    const v = H > 0 ? sy / H : 0; // scroll in viewport heights
+    const t = clamp01(v) * keep;
     y = cy - DETAIL_FIELD.parallax * H * t;
-    alpha = 1 - (1 - DETAIL_FIELD.dimTo) * t;
+    const dim = smoothstep(0, DETAIL_FIELD.dimBy, v) * keep;
+    const far = smoothstep(DETAIL_FIELD.dimBy, DETAIL_FIELD.farBy, v) * keep;
+    alpha = (1 - (1 - DETAIL_FIELD.dimTo) * dim) * (1 - (1 - DETAIL_FIELD.farTo / DETAIL_FIELD.dimTo) * far);
   }
 
   if (id === StateId.CONSTELLATION && detailFx.stageTop >= 0 && H > 0) {

@@ -74,6 +74,13 @@ const HERO_L = { desktop: CHAPTERS.top.L, mobile: CHAPTERS.top.mobileL } as cons
 const W = PROJECT_WINDOW_VH;
 const win = (k: number) => [chapter('projects', k * W), chapter('projects', k * W + 0.3 * W)] as const;
 
+/** Mobile Pour window: the chart slot's top from this % of the viewport to this % (tuned, see SEGMENTS). */
+export const MOBILE_POUR = { from: 80, to: 20 } as const;
+/** Mobile project hand-overs (S4 → S5 → S6 → S7): complete when the slot top reaches this % of the viewport. */
+export const MOBILE_PROJECT_TO = 60;
+/** Mobile spiral: starts when the contact section top is this % down the viewport (tuned, see SEGMENTS). */
+export const MOBILE_SPIRAL_FROM = 60;
+
 export const SEGMENTS: Readonly<Record<LayoutMode, SegmentTable>> = {
   // §4.3 desktop table (global reference values in the comments).
   desktop: {
@@ -93,19 +100,36 @@ export const SEGMENTS: Readonly<Record<LayoutMode, SegmentTable>> = {
   },
   // §4.3 mobile: seg0 in the sticky hero; every other segment into chapter X
   // runs while X's field slot top moves from 100% to 40% of the viewport;
-  // seg8 while the contact top moves 100% → 0%.
+  // seg8 while the contact top moves 100% → 0%. Tuned: the Pour and the
+  // spiral are shifted so their shapes form in view (MOBILE_POUR,
+  // MOBILE_SPIRAL_FROM), and anchors.ts slotCarry carries a shape that has
+  // already scrolled away into the next slot (CONTRACTS.md tuning notes).
   mobile: {
     unit: 'svh',
     film: [
       seg(StateId.STATIC, chapter('top', HERO_P.mobile.p0 * HERO_L.mobile), chapter('top', HERO_P.mobile.p1 * HERO_L.mobile), 'rack focus'), // 3–35
-      seg(StateId.NAME, slot(StateId.CHART, -100), slot(StateId.CHART, -40), 'pour'),
+      // The Pour (tuned; §4.3 rule 100% → 40%): the chart's baseline sits
+      // 40svh down its 52svh slot, so under the rule the bars landed below
+      // the fold for the first two thirds of the segment. Slot top 80% → 20%:
+      // the name has reached the top edge when its grains start to fall, the
+      // bottom slabs land in view (m ≈ .4, baseline at 96%), and the chart
+      // settles at 30–60% of the screen, clear of the About text below it.
+      seg(StateId.NAME, slot(StateId.CHART, -MOBILE_POUR.from), slot(StateId.CHART, -MOBILE_POUR.to), 'pour'),
       seg(StateId.CHART, slot(StateId.REDACTED, -100), slot(StateId.REDACTED, -40), 'topple'),
       seg(StateId.REDACTED, slot(StateId.PULSE, -100), slot(StateId.PULSE, -40), 'pulse'),
-      seg(StateId.PULSE, slot(StateId.LATTICE, -100), slot(StateId.LATTICE, -40), 'lattice'),
-      seg(StateId.LATTICE, slot(StateId.DECK, -100), slot(StateId.DECK, -40), 'deck'),
-      seg(StateId.DECK, slot(StateId.CONSTELLATION, -100), slot(StateId.CONSTELLATION, -40), 'constellation'),
+      // Project hand-overs (tuned, final review): the slot top 100% → 60%, so
+      // the emblem is whole while its slot is still in the lower half —
+      // under the 100% → 40% rule about half a screen was dust only.
+      seg(StateId.PULSE, slot(StateId.LATTICE, -100), slot(StateId.LATTICE, -MOBILE_PROJECT_TO), 'lattice'),
+      seg(StateId.LATTICE, slot(StateId.DECK, -100), slot(StateId.DECK, -MOBILE_PROJECT_TO), 'deck'),
+      seg(StateId.DECK, slot(StateId.CONSTELLATION, -100), slot(StateId.CONSTELLATION, -MOBILE_PROJECT_TO), 'constellation'),
       seg(StateId.CONSTELLATION, slot(StateId.STACK, -100), slot(StateId.STACK, -40), 'stack'),
-      seg(StateId.STACK, chapter('contact', -100), chapter('contact', 0), 'spiral'),
+      // The spiral (tuned; §4.3: contact top 100% → 0%): the beacon sits
+      // 46svh down the contact stage, so under the rule it formed below the
+      // fold for the first half of the segment and the frame was empty.
+      // Contact top 60% → 0%: the beacon's box comes up from the fold as the
+      // stack winds into it, and it is whole as the stage sticks.
+      seg(StateId.STACK, chapter('contact', -MOBILE_SPIRAL_FROM), chapter('contact', 0), 'spiral'),
     ],
     sink: { y0: chapter('contact', 30), y1: end(0) },
   },

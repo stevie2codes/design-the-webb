@@ -136,6 +136,7 @@ export interface FieldUniforms {
   uVelocity: IUniform<number>;
   uSafe: IUniform<Float32Array>;
   uSafeW: IUniform<Float32Array>;
+  uSafeF: IUniform<Float32Array>;
   uSafeCount: IUniform<number>;
   uGroupW: IUniform<Float32Array>;
   uFocusOn: IUniform<number>;
@@ -193,6 +194,7 @@ export function createUniforms(placeholder: { pos: DataTexture; meta: DataTextur
     uVelocity: { value: 0 },
     uSafe: { value: new Float32Array(LIMITS.safeRects * 4) },
     uSafeW: { value: new Float32Array(LIMITS.safeRects).fill(1) },
+    uSafeF: { value: new Float32Array(LIMITS.safeRects).fill(24) },
     uSafeCount: { value: 0 },
     uGroupW: { value: new Float32Array(LIMITS.groups).fill(1) },
     uFocusOn: { value: 0 },

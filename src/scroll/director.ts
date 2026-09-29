@@ -12,7 +12,7 @@
  */
 import { StateId } from '../field/states/ids.ts';
 import { PathId, STATE_PARAMS } from '../field/uniforms.ts';
-import { activeSafeRects, anchorTransform, createSafeRectBuffer, hangInView } from './anchors.ts';
+import { activeSafeRects, anchorTransform, createSafeRectBuffer, hangInView, slotCarry } from './anchors.ts';
 import { CHAPTER_STATE, HOME_ORDER } from './chapters.ts';
 import { HERO_P } from './segments.ts';
 import type {
@@ -523,8 +523,10 @@ export function tick(s: FieldStore, dtIn: number, now: number): FieldFrame {
     // Shapes ride the viewport edge while they morph (anchors.ts hangInView).
     hangInView(f.a, s, f.offA);
     hangInView(f.b, s, f.offB);
+    // Mobile: a shape that has scrolled away is carried into the next slot (anchors.ts slotCarry).
+    slotCarry(f.seg, f.mix, s, f.offA, f.offB);
   }
-  activeSafeRects(s, f.safe);
+  activeSafeRects(s, f.safe, (f.a === StateId.NAME ? 1 - f.mix : 0) + (f.b === StateId.NAME ? f.mix : 0));
 
   // Pointer (§3.7): fine pointers under full motion only.
   const p = s.pointer;

@@ -53,25 +53,28 @@ export const PROJECT_HOLD_Q = 0.56;
 
 /**
  * C3 hand-over, as local progress q within a window (§5 C3): the previous
- * panel's close runs over q 0–.12, then `data-active` (and the text-safe
- * rects, anchors.ts activeSafeRects) switch to the next panel at q .13.
+ * panel's close runs over q 0–.10, and `data-active` (and the text-safe
+ * rects, anchors.ts activeSafeRects) switch to the next panel at q .08,
+ * inside it (tuned, final review: a sequence — exit, then reveal — left an
+ * empty frame at every hand-over; the panels' opacity now crossfades over
+ * 300 ms at the switch while the incoming lines are already rising).
  */
-export const PROJECT_SWITCH_Q = 0.13;
+export const PROJECT_SWITCH_Q = 0.08;
 
 /**
  * C3 panel text windows, in window-local q (§5 C3), shared by the stage
  * choreography (chapters/projects/stage.ts) and the text-safe mask weights
  * (anchors.ts activeSafeRects), so the scrim, the mask and the text fade
  * together:
- * - `exit`: the previous panel's text exits (opacity 1 → 0) over q 0–.12;
+ * - `exit`: the previous panel's text exits (opacity 1 → 0) over q 0–.10;
  * - `reveal`: windows 1–3 reveal their index, title and fade-ups over
- *   q .14–.30;
+ *   q .08–.24 (overlapping the exit: a crossfade, not a sequence);
  * - `first`: window 0 reveals during the transit-in, while the section top
  *   moves from 30% of the viewport to stuck q .10.
  */
 export const PROJECT_TEXT_Q = {
-  exit: [0, 0.12],
-  reveal: [0.14, 0.3],
+  exit: [0, 0.1],
+  reveal: [0.08, 0.24],
   first: { fromPct: 30, toQ: 0.1 },
 } as const;
 

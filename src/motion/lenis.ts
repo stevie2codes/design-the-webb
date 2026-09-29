@@ -49,6 +49,11 @@ export interface GlideOptions {
 export interface JumpCutOptions {
   /** Runs right after the cut (scroll, ST update, director snap): move focus here. */
   onCut?: () => void;
+  /**
+   * Recompute the target after a layout change (the motion preference flips
+   * mid-cut: the flow layout moves every chapter). Null keeps `y`.
+   */
+  retarget?: () => number | null;
 }
 
 const call = (fn: () => void): void => fn();

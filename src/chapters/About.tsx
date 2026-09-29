@@ -68,6 +68,7 @@ export default function About() {
           <p
             data-cursor="text"
             data-reveal="lines"
+            data-reveal-timed
             className="t-display-l mt-7 text-balance text-ink desktop:text-[length:max(2.25rem,min(clamp(2.25rem,1.3rem+3.4vw,5rem),7.4svh))] desktop:low:text-[length:max(2.25rem,min(clamp(2.25rem,1.3rem+3.4vw,5rem),6.2svh))]"
           >
             {/* The accent phrase never breaks (no "data meets / decisions" widow);

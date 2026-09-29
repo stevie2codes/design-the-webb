@@ -122,6 +122,8 @@ export interface SafeRecord {
   x1: number;
   y1: number;
   panel?: number;
+  /** `data-safe="tight"`: keeps the narrow feather while the S1 name shows (the hero blocks beside the name). */
+  tight?: boolean;
 }
 
 /** Touch ripple: viewport px x, y; t0 in seconds (gsap.ticker.time; −1 = none); amp. */
@@ -185,13 +187,16 @@ export type Vec4 = [number, number, number, number];
 export type Vec3 = [number, number, number];
 
 /**
- * `uSafe[6]` + `uSafeW[6]` + `uSafeCount`: `rects` holds 6 × (x0, y0, x1, y1)
- * in viewport CSS px; `weights` 6 mask strengths in [0, 1] (1 = the full
- * §2.3 mask; a C3 panel's blocks ramp with their text reveal / exit).
+ * `uSafe[6]` + `uSafeW[6]` + `uSafeF[6]` + `uSafeCount`: `rects` holds 6 ×
+ * (x0, y0, x1, y1) in viewport CSS px; `weights` 6 mask strengths in [0, 1]
+ * (1 = the full §2.3 mask; a C3 panel's blocks ramp with their text reveal /
+ * exit); `feathers` 6 outward feathers in px (anchors.ts SAFE_FEATHER).
  */
 export interface SafeRectBuffer {
   readonly rects: Float32Array;
   readonly weights: Float32Array;
+  /** `uSafeF[6]`: each rect's outward feather (px). */
+  readonly feathers: Float32Array;
   count: number;
 }
 

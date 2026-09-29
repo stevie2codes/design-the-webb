@@ -23,9 +23,13 @@ const UP_WINDOW = '30,0';
  *   clear the beacon, so the sticky stage still holds everything; short
  *   phones also tighten the body gap and the bottom padding (360×640 stays
  *   sticky).
+ * - --disc-gap / --shell-gap: how far the email row clears the disc and the
+ *   beacon's shell; tighter on short phones (mobile, height < 600, where the
+ *   beacon is also ×.8 at 44svh: layout.ts), so 375×548 and 360×560 stay
+ *   sticky too.
  */
 const STAGE =
-  'group/contact [--disc-d:max(calc(var(--anchor-beacon-r)*1.24),6.75rem)] [--email-y:68svh] desktop:[--email-y:74svh] mobile:[@media(max-height:699.98px)]:[--email-y:0px] short:[--email-y:0px]';
+  'group/contact [--disc-d:max(calc(var(--anchor-beacon-r)*1.24),6.75rem)] [--email-y:68svh] desktop:[--email-y:74svh] mobile:[@media(max-height:699.98px)]:[--email-y:0px] short:[--email-y:0px] [--disc-gap:24px] [--shell-gap:16px] mobile:short:[--disc-gap:16px] mobile:short:[--shell-gap:4px]';
 
 /**
  * C5 Contact — #contact (SPEC §5 C5). Sticky on both layouts (L 40vh desktop,
@@ -39,7 +43,7 @@ const STAGE =
  * headline on one line and bring the portrait inline.
  *
  * The email row never overlaps the beacon: it starts at
- * max(--email-y, disc bottom + 24px, shell bottom (cy + R) + 16px), so
+ * max(--email-y, disc bottom + --disc-gap, shell bottom (cy + R) + --shell-gap), so
  * nothing collides on short screens (the disc is only 1.24R across; the
  * dotted shell is 2R).
  *
@@ -93,13 +97,14 @@ export default function Contact() {
         {/* Row 1: the header, over a floor that keeps row 2 below the disc. */}
         <div
           aria-hidden="true"
-          className="col-start-1 row-start-1 h-[max(var(--email-y),calc(var(--anchor-beacon-cy)+var(--disc-d)/2+24px),calc(var(--anchor-beacon-cy)+var(--anchor-beacon-r)+16px))]"
+          className="col-start-1 row-start-1 h-[max(var(--email-y),calc(var(--anchor-beacon-cy)+var(--disc-d)/2+var(--disc-gap)),calc(var(--anchor-beacon-cy)+var(--anchor-beacon-r)+var(--shell-gap)))]"
         />
         <div className="col-start-1 row-start-1 w-full self-start px-gutter pt-[max(92px,11svh)] desktop:pt-[max(104px,11svh)] short:pt-[70px]">
           <div data-safe className="mx-auto w-fit max-w-full text-center">
             <ChapterHeading heading={contact.heading} id={titleId} />
             <p
               data-reveal="lines"
+              data-reveal-timed
               className="t-display-l mt-3 text-ink desktop:mt-4 short:mt-2 short:text-[min(clamp(2.25rem,1.3rem+3.4vw,5rem),9svh)]"
             >
               <span className="block short:inline">{contact.headline.lead}</span>{' '}
@@ -122,8 +127,10 @@ export default function Contact() {
               className="mx-auto mt-5 max-w-[44ch] desktop:mt-4 desktop:text-center short:text-left mobile:[@media(max-height:699.98px)]:mt-3"
             >
               <Portrait variant="inline" />
-              {/* Balanced when centred (no "talk shop." widow); pretty beside the inline portrait. */}
-              <p className="t-body text-pretty text-ink-2 desktop:text-balance short:text-pretty">{contact.body}</p>
+              {/* Balanced when centred (no "talk shop." widow); pretty beside the inline portrait.
+                  Mobile: its own block beside the floated portrait (flow-root), so a
+                  fourth line on narrow phones never wraps under the photo. */}
+              <p className="t-body text-pretty text-ink-2 desktop:text-balance short:text-pretty mobile:flow-root">{contact.body}</p>
             </div>
           </div>
         </div>

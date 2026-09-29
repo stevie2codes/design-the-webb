@@ -53,6 +53,12 @@ export interface RevealOptions {
   duration?: number;
   /** Time-based only: seconds of delay after the trigger. */
   delay?: number;
+  /**
+   * Time-based only: play when scroll passes `start` and reverse when it
+   * comes back above it (instead of playing once). The statements use it, so
+   * a paused scroll never leaves a line sliced mid-glyph.
+   */
+  reverse?: boolean;
 }
 
 /** A running reveal. */
@@ -76,9 +82,10 @@ const FADE_Y_PX = 16;
 
 function scrollTriggerVars(opts: RevealOptions): ScrollTrigger.Vars {
   const w = opts.window;
-  return opts.scrub === false
-    ? { trigger: w.trigger, start: w.start, once: true }
-    : { trigger: w.trigger, start: w.start, end: w.end, scrub: true };
+  if (opts.scrub !== false) return { trigger: w.trigger, start: w.start, end: w.end, scrub: true };
+  return opts.reverse
+    ? { trigger: w.trigger, start: w.start, toggleActions: 'play none none reverse' }
+    : { trigger: w.trigger, start: w.start, once: true };
 }
 
 function tweenVars(opts: RevealOptions, stagger: number): gsap.TweenVars {

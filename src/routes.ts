@@ -5,7 +5,9 @@
  * page. The prerender (scripts/prerender-plugin.mjs) stamps each file's
  * `#root` with its route key (`data-ssr`); main.tsx hydrates only when that
  * key matches the key of the URL being loaded, and renders from scratch
- * otherwise (e.g. an unknown slug served the 404 file).
+ * otherwise. An unknown `/work/<slug>` is served work/404.html ("Project
+ * not found", §6), any other unknown path 404.html, so both paths (JS on and
+ * off) show the same page (§8.4).
  *
  * Pure data: no DOM access (the prerender imports it in Node).
  */
@@ -14,7 +16,7 @@ import { detail, notFound, siteTitle } from './content/site';
 
 /** Key of the generic 404 page (any unknown path). */
 export const NOT_FOUND_KEY = '404';
-/** Key of `/work/:slug` with an unknown slug (not prerendered: "Project not found"). */
+/** Key of `/work/:slug` with an unknown slug ("Project not found", prerendered to work/404.html). */
 export const PROJECT_NOT_FOUND_KEY = 'project-404';
 
 /** "/work/pulse/" → "/work/pulse"; "" → "/". */
@@ -55,4 +57,12 @@ export const PRERENDER_ROUTES: readonly PrerenderRoute[] = [
     title: detail.documentTitle(p.title),
   })),
   { url: '/404', key: NOT_FOUND_KEY, file: '404.html', title: detail.documentTitle(notFound.title) },
+  // Any unknown slug renders the same "Project not found" page (public/_redirects
+  // serves this file with status 404 for /work/*; real work/<slug>.html files win).
+  {
+    url: '/work/__not-found',
+    key: PROJECT_NOT_FOUND_KEY,
+    file: 'work/404.html',
+    title: detail.documentTitle(detail.notFound.title),
+  },
 ];

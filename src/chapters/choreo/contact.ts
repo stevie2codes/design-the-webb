@@ -31,7 +31,7 @@
  */
 import { prime } from '../../motion/prime';
 import { SEGMENTS, type SegEdge } from '../../scroll/segments';
-import { svhPx } from '../../scroll/anchors';
+import { CONTACT_HEAD, svhPx } from '../../scroll/anchors';
 import { headingId } from '../../scroll/chapters';
 import { store } from '../../scroll/store';
 import type { ChapterContext } from '../../scroll/useChapter';
@@ -78,6 +78,18 @@ export function contactChoreo(ctx: ChapterContext): () => void {
       ),
     );
     ctx.track(asReveal(tween, () => gsap.set(disc, { clearProps: 'opacity,transform,scale' })));
+  }
+
+  // Mobile: the header's scrim fades in with its line masks (CONTACT_HEAD,
+  // the same window as its text-safe mask weight in anchors.ts), so no empty
+  // dark box stands in the spiral before the text arrives.
+  const head = ctx.layout === 'mobile' ? section.querySelector<HTMLElement>('[data-safe]') : null;
+  if (head) {
+    const win = ctx.window(head, CONTACT_HEAD.from * 100, CONTACT_HEAD.to * 100);
+    const tween = prime(
+      gsap.fromTo(head, { '--scrim': 0 }, { '--scrim': 1, ease: 'none', scrollTrigger: scrubVars(win) }),
+    );
+    ctx.track(asReveal(tween, () => head.style.removeProperty('--scrim')));
   }
 
   // ── Ignition (F ≥ 8.98, once per arrival) ────────────────────────────────

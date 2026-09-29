@@ -50,6 +50,11 @@ void livePulse(inout Live L, vec4 meta, vec4 off, float t) {
   float head = -PULSE_MARGIN + (1.0 + 2.0 * PULSE_MARGIN) * ph;
   float u = meta.b;
   float charge = 1.0 + PULSE_CHARGE * uCharge;
+  // The C3 curtain (uDisperse): the ECG trace, its ghosts and the spike fade
+  // out as the halo opens (final review: they poked out of both sides of the
+  // open card as stray hair segments), so only the outline and the rings
+  // frame the card.
+  if (role == R_FLOW || role == R_GHOST || role == R_SPARK) L.alpha *= 1.0 - smoothstep(0.3, 0.6, uDisperse);
 
   if (role == R_FLOW) {
     float h = pulseHi(u, head);

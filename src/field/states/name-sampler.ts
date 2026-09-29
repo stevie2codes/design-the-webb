@@ -5,7 +5,8 @@
  *    fallback stack — the computed font-family, i.e. what the DOM shows.
  *    The engine resamples once on `document.fonts` `loadingdone`.
  * 2. Per glyph: Range + getClientRects() for DOM x / width; per line a
- *    zero-size inline-block probe gives the baseline.
+ *    zero-size inline-block probe gives the baseline (snapped to device
+ *    pixels, like the painted text).
  * 3. Draw every glyph at ITS DOM x on a canvas of the h1 rect × 2 (≤ 2048px
  *    wide), with a per-glyph width lock sx = domWidth / measureText (clamped
  *    .6–1.6), so browsers that ignore fontStretch / letterSpacing still match.
@@ -156,7 +157,12 @@ function measureDom(h1: HTMLElement, anchorEl: HTMLElement | null): Frame | null
     probe.style.cssText =
       'display:inline-block;width:0;height:0;margin:0;padding:0;border:0;vertical-align:baseline';
     el.appendChild(probe);
-    const baseline = probe.getBoundingClientRect().bottom;
+    // Chromium paints text on a device-pixel-snapped baseline; the probe
+    // reports the layout (fractional) one. Snap it the same way, or the
+    // particle name sits up to half a device pixel off the DOM glyphs
+    // (final review: 1440 × 900, baseline 558.53 → painted at 559).
+    const dpr = window.devicePixelRatio || 1;
+    const baseline = Math.round(probe.getBoundingClientRect().bottom * dpr) / dpr;
     probe.remove();
 
     let x0 = Infinity;

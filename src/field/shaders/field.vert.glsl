@@ -56,13 +56,14 @@
 // under the 24 px cursor ring.
 #define LOUPE_CORE 0.35
 
-// Text-safe mask (§2.3; tuned, CONTRACTS.md): ×.22 over the §2.3 24px
-// feather, eased (smootherstep, no Mach band at either end of the ramp),
-// then an ABSOLUTE ceiling — after FIELD_GAIN the relative ×.22 alone still
-// let one crisp grain reach ~.4 α behind text. The feather stays 24px: the
-// hero eyebrow sits 20–50px above the name's cap line, and a wider ramp
-// dims the particle name's top.
-#define SAFE_FEATHER 24.0
+// Text-safe mask (§2.3; tuned, CONTRACTS.md): ×.22 inside each block's rect,
+// with a per-rect outward feather (uSafeF: 112px, so the
+// dimming reads as a soft falloff rather than a dark box; 24px for the nav
+// band and the hero blocks beside the S1 name), eased (smootherstep, no Mach
+// band at either end of the ramp), then an ABSOLUTE ceiling — after
+// FIELD_GAIN the relative ×.22 alone still let one crisp grain reach ~.4 α
+// behind text. The ramp runs on the Euclidean distance to the rect, so its
+// outer iso-lines are rounded (the block itself stays fully masked).
 #define SAFE_ALPHA_MUL 0.22
 #define SAFE_ALPHA_MAX 0.06
 #define RIPPLE_PX 240.0
@@ -118,6 +119,7 @@ uniform float uScrollPx;
 uniform float uVelocity;
 uniform vec4 uSafe[6]; // viewport CSS px: x0, y0, x1, y1
 uniform float uSafeW[6]; // per-rect weight: 1 full mask, 0 off (a block whose text is still revealing)
+uniform float uSafeF[6]; // per-rect outward feather, px (anchors.ts SAFE_FEATHER: 112 soft, 24 nav band / tight)
 uniform int uSafeCount;
 uniform float uGroupW[8];
 uniform float uFocusOn;
@@ -322,7 +324,8 @@ void main() {
   float persp = CAM_Z / (CAM_Z - p.z);
 
   // Group focus (uGroupW, damped on the CPU; 1 = neutral). S8's unfocused
-  // plates also rack out of focus (+1.2 CoC).
+  // plates also rack out of focus (+.6 CoC; final review: at +1.2 the three
+  // resting plates dissolved and the stack read as one plate).
   float wA = groupW(mA);
   float wB = groupW(mB);
   float w = mix(wA, wB, e);
@@ -333,7 +336,7 @@ void main() {
 #ifdef GLOW
   float dof = 1.0;
 #else
-  float gBlur = mix(stackA * 1.2 * (1.0 - wA), stackB * 1.2 * (1.0 - wB), e);
+  float gBlur = mix(stackA * 0.6 * (1.0 - wA), stackB * 0.6 * (1.0 - wB), e);
   float dof = 1.0 + uAperture * min(abs(p.z - uFocusZ), 3.0) * 4.5 + gBlur;
   dof = mix(dof, 1.0, loupe);
 #endif
@@ -361,7 +364,7 @@ void main() {
   rampPos = mix(rampPos, 0.75, 0.7 * smoothstep(0.7, 1.0, w) * uFocusOn * mix(stackA, stackB, e));
 
   // Text-safe mask (§2.3, §3.6) on the final screen position: particles
-  // inside a [data-safe] block (smootherstep feather) get α ×.22, no ember,
+  // inside a [data-safe] block (rounded, smootherstep feather) get α ×.22, no ember,
   // no extra brightness (beam, loupe) and, whatever the gain, at most
   // SAFE_ALPHA_MAX — so the field behind text stays at or below #262A34.
   vec2 ndc = gl_Position.xy / gl_Position.w;
@@ -370,8 +373,12 @@ void main() {
   for (int k = 0; k < 6; k++) {
     if (k >= uSafeCount) break;
     vec4 r = uSafe[k];
-    vec2 d = max(r.xy - px, px - r.zw);
-    float x = clamp(1.0 - max(d.x, d.y) / SAFE_FEATHER, 0.0, 1.0);
+    float fea = max(uSafeF[k], 1.0);
+    // Euclidean distance outside the rect (< 0 inside): the whole block is
+    // fully masked, and the ramp's iso-lines round off its corners.
+    vec2 q = abs(px - 0.5 * (r.xy + r.zw)) - 0.5 * (r.zw - r.xy);
+    float sd = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0);
+    float x = clamp(1.0 - sd / fea, 0.0, 1.0);
     float inside = x * x * x * (x * (x * 6.0 - 15.0) + 10.0) * uSafeW[k];
     alpha *= mix(1.0, SAFE_ALPHA_MUL, inside);
     rampPos = mix(rampPos, min(rampPos, 0.5), inside);
@@ -379,6 +386,11 @@ void main() {
   }
   alpha = mix(alpha, min(alpha, SAFE_ALPHA_MAX), insideMax);
   bright = mix(bright, min(bright, 1.0), insideMax);
+  // A dimmed anchor (the detail page's emblem at α .25 → .12, the C3
+  // curtain halo) keeps its live highlights proportionally dim: brightness
+  // gains (the ECG's ember head, sparks) are capped to 1 below α .2 (final
+  // review: the Pulse highlight still read beside the detail writeup).
+  bright = mix(min(bright, 1.0), bright, smoothstep(0.2, 0.6, mix(uOffA.w, uOffB.w, e)));
 
   vColor = ramp(rampPos) * bright;
   vAlpha = alpha;

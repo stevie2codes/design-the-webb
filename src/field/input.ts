@@ -12,6 +12,13 @@ import { store } from '../scroll/store.ts';
 const TAP_SLOP = 10;
 /** Ripple lifetime (s): one ripple at a time. */
 const RIPPLE_S = 0.6;
+/**
+ * Ripple amplitude (`uRipple.w`; tuned, CONTRACTS.md). At 1 (the §3.7 push of
+ * .03 su and +40% α) the ring was all but invisible over the dim, defocused
+ * S0 noise a phone shows at rest — the first place anyone taps. 1.6 reads
+ * as a soft ring there and stays a gentle ping over resolved shapes.
+ */
+const RIPPLE_AMP = 1.6;
 const INTERACTIVE = 'a,button,input,select,textarea,label,summary,[role="button"],[role="link"],[tabindex]:not([tabindex="-1"])';
 
 export interface InputHooks {
@@ -71,7 +78,7 @@ export function attachInput(hooks: InputHooks): () => void {
     r[0] = e.clientX;
     r[1] = e.clientY;
     r[2] = now;
-    r[3] = 1;
+    r[3] = RIPPLE_AMP;
     hooks.wake('pointer');
   };
   const vis = () => {

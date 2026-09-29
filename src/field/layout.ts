@@ -330,6 +330,17 @@ const slotCard = (s: number): AnchorBox => box('slot', 'projects', GUTTER, px(0)
 const slotStack = (s: number, k: number): AnchorBox =>
   box('slot', 'capabilities', vw((100 - 84 * k) / 2), svh((s - 40 * k) / 2), vw(84 * k), svh(40 * k));
 
+/** Mobile S9: centre (50vw, cy svh), R = 24vw × k (the contact stage frame). */
+const beaconMobile = (k: number, cy: number): AnchorBox =>
+  box('stage', 'contact', vw(50 - 24 * k), sub(svh(cy), vw(24 * k)), vw(48 * k), vw(48 * k), {
+    cx: vw(50),
+    cy: svh(cy),
+    r: vw(24 * k),
+  });
+
+/** Desktop S2 baseline: 80svh, lifted on short viewports (see ANCHORS[S2]). */
+const CHART_BASE_D = min(svh(80), sub(svh(100), px(180)));
+
 const S = SHORT_SLOT_SVH;
 const K = SHORT_SHAPE_SCALE;
 
@@ -357,8 +368,12 @@ export const ANCHORS: Readonly<Record<StateId, StateAnchors>> = {
   },
 
   // S2: frame x 54 → 92vw, baseline 80svh, 7-year scale H = 52svh.
+  // Tuned (final review): the baseline is at most 100svh − 180px, so the
+  // bar notes (≈ 130px under it) keep ≥ 50px above the fold on short
+  // laptops (1280 × 720: baseline 540 instead of 576); from 900px tall
+  // (80svh ≤ 100svh − 180px) nothing changes.
   [StateId.CHART]: {
-    desktop: box('stage', 'about', vw(54), svh(28), vw(38), svh(52), { baseline: svh(80) }),
+    desktop: box('stage', 'about', vw(54), sub(CHART_BASE_D, svh(52)), vw(38), svh(52), { baseline: CHART_BASE_D }),
     mobile: slotChart(SLOT_SVH.about, 1),
     mobileShort: slotChart(S, K),
   },
@@ -390,11 +405,12 @@ export const ANCHORS: Readonly<Record<StateId, StateAnchors>> = {
       cy: svh(52),
       r: svh(12),
     }),
-    mobile: box('stage', 'contact', vw(26), sub(svh(46), vw(24)), vw(48), vw(48), {
-      cx: vw(50),
-      cy: svh(46),
-      r: vw(24),
-    }),
+    mobile: beaconMobile(1, 46),
+    // Height < 600 (tuned; §4.2 scales slot shapes ×.8): R = 19.2vw at
+    // 44svh, so the stuck contact stage still holds the headline, the beacon
+    // and the email row + body on short phones (375 × 548, 360 × 560)
+    // instead of falling back to flow.
+    mobileShort: beaconMobile(K, 44),
   },
 
   // S10 (404): a line from 8vw to 92vw at 68svh; mobile gutter to gutter at 70svh. h = 0 (a line).

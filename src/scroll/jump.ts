@@ -32,8 +32,14 @@ export const isPlainClick = (e: MouseEvent): boolean =>
 /** Glide when the target is at most this many film states away (§4.4). */
 export const GLIDE_MAX_STATES = 2;
 
-const clampY = (y: number): number => {
-  const max = scrollLimit();
+/**
+ * Clamp to the scroll range. `live` measures the document now (a jump, once
+ * per click: the cached limit can still be another route's right after a
+ * route swap); the rail's per-sample targets use the cached limit (no layout
+ * reads at sample rate).
+ */
+const clampY = (y: number, live = false): number => {
+  const max = live ? Math.max(0, document.documentElement.scrollHeight - window.innerHeight) : scrollLimit();
   return Math.max(0, max > 0 ? Math.min(y, max) : y);
 };
 
@@ -48,7 +54,7 @@ export function chapterTarget(id: JumpId, s: FieldStore = store): number | null 
   if (rec) {
     if (id === 'top') return 0;
     const H = s.scroll.H || window.innerHeight;
-    return clampY(rec.top + (rec.sticky ? (JUMP_OFFSET_VH[id] * H) / 100 : 0));
+    return clampY(rec.top + (rec.sticky ? (JUMP_OFFSET_VH[id] * H) / 100 : 0), true);
   }
   // Before the first refresh: measure once.
   const section = document.getElementById(id);
@@ -57,7 +63,7 @@ export function chapterTarget(id: JumpId, s: FieldStore = store): number | null 
   const stage = section.querySelector<HTMLElement>(':scope > .stage');
   const sticky = stage !== null && getComputedStyle(stage).position === 'sticky';
   const offset = sticky ? (JUMP_OFFSET_VH[id] * window.innerHeight) / 100 : 0;
-  return clampY(section.getBoundingClientRect().top + window.scrollY + offset);
+  return clampY(section.getBoundingClientRect().top + window.scrollY + offset, true);
 }
 
 /**
@@ -128,13 +134,13 @@ export function jumpKind(from: number, to: number, s: FieldStore = store, smooth
  * right away for a glide (the heading is focused as the glide starts), after
  * the snap for a jump cut, at once when instant.
  */
-export function jumpToY(y: number, onArrive?: () => void): JumpKind {
+export function jumpToY(y: number, onArrive?: () => void, retarget?: () => number | null): JumpKind {
   const kind = jumpKind(store.scroll.y, y, store, isSmooth());
   if (kind === 'glide') {
     glide(y);
     onArrive?.();
   } else {
-    jumpCut(y, { onCut: onArrive }); // instant without Lenis
+    jumpCut(y, { onCut: onArrive, retarget }); // instant without Lenis
   }
   return kind;
 }
@@ -146,7 +152,7 @@ export function jumpToY(y: number, onArrive?: () => void): JumpKind {
 export function jumpToChapter(id: JumpId): boolean {
   const y = chapterTarget(id);
   if (y === null) return false;
-  jumpToY(y, () => focusChapterHeading(id));
+  jumpToY(y, () => focusChapterHeading(id), () => chapterTarget(id));
   return true;
 }
 

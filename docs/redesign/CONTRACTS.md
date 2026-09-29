@@ -62,18 +62,18 @@ Type-level additions to §9.2 (the runtime shape is unchanged):
 
 | Symbol | Signature |
 |---|---|
-| `NAV_BAND_PX`, `SAFE_FEATHER_PX` | constants: 64 / 56 px and 24 px |
+| `NAV_BAND_PX`, `SAFE_FEATHER_PX`, `SAFE_FEATHER` | constants: 64 / 56 px; 24 px; `{ soft: 112, tight: 24 }` (per-rect outward feathers, see Tuning notes) |
 | `stageTop(y, ch: ChapterRecord)` | `→ number`. The viewport top of the chapter's frame (§9.6). |
 | `isStageSticky(stageEl)` | `→ boolean`. Reads computed style, so call it at refresh only. |
 | `registerChapterRects(id, stageEl, s = store)` | `→ void`. **Refresh only.** Measures `[data-field-anchor]` and `[data-safe]`. |
 | `clearChapterRects(id, s = store)` | `→ void`. Call it on unmount or route change. |
 | `anchorCenter(id, s, out)` | `→ [x, y]` in viewport px. An unmeasured state falls back to its `layout.ts` box, treated as viewport-framed. |
 | `anchorTransform(id, s, out: Vec4, disperse?)` | `→ [x px, y px, scale, alpha]`. Applies the S9 sink and the S4–S7 curtain; on a detail route S4–S7 go through `scroll/detailField.ts` `detailAnchorTransform` (detail anchor, scroll parallax and dimming, the MCP App re-stage over its spacer, the 700 ms home → detail hand-off, the "Next project" commit back to rest, reduced-motion registration to the header). |
-| `hangInView(id, s, out)` | Home film, desktop only: clamps an endpoint's anchor centre into [nav band + h/2, 100svh − h/2] so a shape whose chapter has scrolled away rides the viewport edge while it morphs. Never S0, S2 (DOM axis registration), S10, or S9 during the sink. The director applies it to both endpoints outside route mode and posters. See Tuning notes. |
+| `hangInView(id, s, out)` | Home film, desktop only: clamps an endpoint's anchor centre into [nav band + h/2, 100svh − h/2] so a shape whose chapter has scrolled away rides the viewport edge while it morphs. Never S0, S1 (the Pour leaves with the h1), S2 (DOM axis registration), S10, or S9 during the sink. The director applies it to both endpoints outside route mode and posters. See Tuning notes. |
 | `registerPageRects(root)` / `clearPageRects()` | Routes without chapters (detail pages, 404): their `[data-safe]` blocks in document px, `chapter: 'page'`. `activeSafeRects` reads page rects only off the home route and chapter rects only on it. |
 | `svhPx()` | `→ number`, 100svh in px (measured once per refresh; browser only) |
 | `createSafeRectBuffer()` | `→ SafeRectBuffer` |
-| `activeSafeRects(s, out?)` | `→ SafeRectBuffer`. The nav band, then the 5 on-screen blocks nearest the centre. In the stuck C3 stage, only the active panel's blocks count; the active panel switches at the hand-over, `floor(4p − PROJECT_SWITCH_Q)`, so the exiting text stays masked over q 0–.12. Those blocks carry a weight that follows their text (`PROJECT_TEXT_Q`: in over the reveal, out over the exit; a block at weight 0 is dropped); every other rect weighs 1. |
+| `activeSafeRects(s, out?, nameW = 0)` | `→ SafeRectBuffer` (rects, weights, feathers). The nav band, then the 5 on-screen blocks nearest the centre. In the stuck C3 stage, only the active panel's blocks count; the active panel switches at the hand-over, `floor(4p − PROJECT_SWITCH_Q)`, at q .08, inside the exit (q 0–.10). Those blocks carry a weight that follows their text (`PROJECT_TEXT_Q`: in over the reveal, out over the exit; a block at weight 0 is dropped); every other rect weighs 1. |
 | `BEACON_SINK`, `beaconSinkEase(sink)` | The S9 sink's tuning (see Tuning notes) and its travel / scale progress |
 
 ### `src/scroll/director.ts`: owner scroll; status real
@@ -127,7 +127,7 @@ Adding a state takes four things: a generator in `states/sNN-*.ts`, its live fun
 
 `TierName`, `TIER_ORDER`, `TierSpec`, `TIERS` (the §3.2 counts), `BOKEH_SHARE`, `TierEnv`, `pickTier(env) → TierName`, `dprCap(tier, cores)`, `isFeebleDevice(env)`, `readTierEnv()` (browser only), `PROBE`, `ADAPTIVE`, `AdaptiveStep`.
 
-### `src/field/index.ts`: owner engine; status real (the Canvas2D fallback is `TODO(phase8-engine)`)
+### `src/field/index.ts`: owner engine; status real (Canvas2D fallback in `fallback2d.ts`)
 
 | Symbol | Signature |
 |---|---|
@@ -135,9 +135,9 @@ Adding a state takes four things: a generator in `states/sNN-*.ts`, its live fun
 | `FieldKind` | `'webgl' \| 'canvas2d' \| 'none'` |
 | `PauseReason` | `'hidden' \| 'menu' \| 'context-lost' \| 'route' \| 'debug'`. Pauses are counted per reason. |
 | `FieldBootOptions` | `{ mode, layout, tier, debug, intro, softwareGL }` |
-| `FieldHandle` | `{ kind, tier (getter), setMode, pause, resume, invalidate, onReady(cb) → unsubscribe, dispose }` |
-| `FieldDebugHandle` | `{ store, frame, tier, kind }`. This is `window.__field`. |
-| `CreateField<Ctx>` | `(canvas, ctx, opts) → Promise<FieldHandle>`. `./engine` must export `createEngine: CreateField<WebGL2RenderingContext>`. |
+| `FieldHandle` | `{ kind (live getter), tier (getter), setMode, pause, resume, invalidate, onReady(cb) → unsubscribe, dispose, debugSlowFrames?(ms) }`. `kind` reads `'canvas2d'` while the engine's loss overlay covers a lost context, and for good after a second loss. `debugSlowFrames(ms)` (WebGL, `?debug` only) adds synthetic frame time to what the probe and the adaptive governor measure; 0 stops it. |
+| `FieldDebugHandle` | `{ store, frame, tier, kind, ready, stats(), slowFrames(ms) }`. This is `window.__field`. |
+| `CreateField<Ctx>` | `(canvas, ctx, opts) → Promise<FieldHandle>`. `./engine` must export `createEngine: CreateField<WebGL2RenderingContext>`; `./fallback2d` exports `createFallback: CreateField<CanvasRenderingContext2D \| null>` (null: the host canvas already holds a WebGL context, so it draws on an overlay canvas of its own). `fallback2d.ts` never imports `three`. |
 | `glAttributes(softwareGL)` | `→ WebGLContextAttributes` (§3.4) |
 | `defaultBootOptions(mode, layout)` | `→ FieldBootOptions`, built from the QA params |
 | `bootField(canvas, opts)` | `→ Promise<FieldHandle>`. Never throws. It creates the context **on the host canvas**, so there is exactly one WebGL context, and then `import('./engine')`. |
@@ -146,9 +146,15 @@ Adding a state takes four things: a generator in `states/sNN-*.ts`, its live fun
 | `FieldHandle.ready` | three loaded, fonts loaded, S0 + S1 built, one frame rendered (§6) |
 | `FieldHandle.intro` | `{ run(): Promise<void>, skip(), running }`: the §6 intro (it runs by itself; any wheel / touch / key / pointerdown skips it) |
 | `FieldHandle.print(on)` | Force the §9.5 print (normally automatic from `frame.lockEdge`) |
-| `FieldHandle.stats()` | `→ FieldStats \| null`: tier, texture tier, drawRange, dpr, glow, bokeh cap, fps, rendered frames, canvas and generated-for size, film ceiling, resident states, adaptive steps fired, context-loss state, S1 source / font / ms / scale (the S1 anchor's width now ÷ at sampling: 1 when registered, see below) |
+| `FieldHandle.stats()` | `→ FieldStats \| null`: tier, texture tier, drawRange, dpr, glow, bokeh cap, fps, rendered frames, canvas and generated-for size, film ceiling, resident states, adaptive steps fired, context-loss state, S1 source / font / ms / scale (the S1 anchor's width now ÷ at sampling: 1 when registered, see below), `renderer` (what draws now: `'canvas2d'` for the fallback and a covered loss) and `paint` (`{ points, dots, paints, ms, meanMs }`, the Canvas2D fallback's paints) |
 | `INTRO_ATTR`, `isIntroPending()`, `clearIntroPending()` | `html[data-intro]`: `"pending"` is the pre-paint script's guess that the §6 intro will run (JS, not rm, `/`, no `?intro=0` / `?film`, no forced colors); the engine replaces it with `"running"` (choreo) or drops it (`clearIntroPending`: no intro, dispose), and so does FieldCanvas when no renderer starts or forced colors are on. The HUD reads 1.00 while it is pending. |
 | `FieldDebugHandle.ready`, `.stats()` | QA waits with `waitForFunction(() => window.__field?.ready)` |
+
+**Fallback triggers (§3.2, §8.4).** `bootField` goes to the Canvas2D fallback (`createFallback`, standalone: sets `html[data-field="fallback"]`, `store.mode` `'fallback'` or `'reduced'`, §9.7 regeneration and the S1 resample) when (1) `isFeebleDevice` (`deviceMemory ≤ 2 && hardwareConcurrency ≤ 2`, no context attempt); (2) no WebGL2 context with `failIfMajorPerformanceCaveat` (a software-only GL; `?debug` / `?tier` drop the flag); (3) the engine chunk fails to load or `createEngine` throws (the host canvas then holds a WebGL context: the fallback draws on an overlay). If the fallback fails too, the handle is kind `'none'` and the CSS glow stays.
+
+**Context loss (engine.ts).** First `webglcontextlost`: WebGL pauses (`'context-lost'`), a `LossFallback` overlay canvas fades in and the engine's own loop paints it from the engine's cached position / meta arrays (S2 leaves `data-field-states`, so the chart's SVG bars show). `webglcontextrestored`: every texture is re-uploaded from the cached arrays, the WebGL canvas crossfades back over 400 ms, the overlay goes. A second loss stays on the overlay for good (`kind` → `'canvas2d'`). A loss before the first frame: the fallback shows, no intro. The adaptive governor is re-created after a restore or a motion toggle with the steps already fired (`new AdaptiveGovernor(fired)`), so it never steps back up.
+
+**Fallback painter (`fallback2d.ts`).** Same generators (worker, or the main-thread runner) at Low-tier size; a uniform subsample (45 sparks + the first 1,500 shape ordinals + the dust inside that prefix), 1.5px dots in 17 ramp colours × 12 α levels, additive. Reads the same director frame as the engine (pair, mix, stagger, turbulence, the POUR / TOPPLE / DIGITIZE / DEAL / SPIRAL paths, offsets, group focus, the stack drawer, the beacon sink, dust drift); live animations frozen at their reduced-motion poster frame; text-safe rects ×.22 with each rect's feather (`f.safe.feathers`), α ≤ .045, never ember. Repaints only when the frame signature changes; under reduced motion it leaves the ticker once settled. The backing store is capped at `FALLBACK.maxPixels` (2.1 M; DPR lowered, never below 1): a full-viewport DPR 2 canvas raster cost 50–126 ms per wheel frame.
 
 `FieldCanvas` (field/FieldCanvas.tsx) is the only mount: `#field-root` with one aria-hidden `<canvas style="opacity:0">` (identical on the server). It acquires in an idle callback (≤ 800 ms), releases on unmount, forwards the motion preference to `setMode`, subscribes `invalidate()` to every scroll write (`subscribeScroll`), samples the HUD once the field is ready, and sets `store.mode = 'css'` when no renderer starts (kind `'none'`: the CSS glow on `body::before` stays the backdrop). Under `forced-colors: active` it never boots the field (and releases a running one when the mode turns on; it boots again when it turns off); index.css unmasks the `<h1>` and hides the canvas, the atmosphere, the scrims and the scroll cue there.
 
@@ -180,8 +186,9 @@ Engine runtime details:
 | `?film=<F>` | At init: `store.film.override = filmOverride(F, true)` and `flags.intro = false`. No damp, no cut. The lock still needs hero p ≥ p1, so scroll there if you want the printed name. | scroll |
 | `?tier=high\|mid\|low` | forces the tier; allows software GL | engine |
 | `?intro=0` | skips the intro | engine |
+| `?debug` + `window.__field.slowFrames(ms)` | adds `ms` of synthetic frame time to the probe / governor (exercise each adaptive step); 0 stops it | engine |
 
-Dev builds always expose the globals. `?tier=…` or `?debug` create the context without `failIfMajorPerformanceCaveat`; headless Chromium here (SwiftShader, `--use-angle=swiftshader --enable-unsafe-swiftshader`) renders WebGL2 without either, but a stricter software GL may need one of them to avoid the fallback.
+Dev builds always expose the globals. `?tier=…` or `?debug` create the context without `failIfMajorPerformanceCaveat`; headless Chromium here (SwiftShader, `--use-angle=swiftshader --enable-unsafe-swiftshader`) renders WebGL2 without either (re-checked in phase 4, desktop and mobile emulation), but a stricter software GL may need one of them to avoid the fallback. Pass `?debug` anyway on QA URLs: it exposes `window.__field` / `__lenis`.
 
 QA scripts (gitignored `.qa/`): `shoot.mjs` (scroll positions, `--mobile --reduced --nogl`), `engine/shot.mjs` (waits for `__field.ready`; `--dpr`, `--clip`, `--scroll`), `intro.mjs` (frames at fixed times after `html[data-intro="running"]`), `interact.mjs` (nav jump cut, runtime motion toggle, rewind, detail route and back).
 
@@ -279,7 +286,9 @@ Pure and allocation-free (render loop). `detailAnchorTransform(id, s, out)`, `DE
 - `chart.ts` (C1), `contact.ts` (C5 reveals, ignition, sink), `horizon.ts` (footer sunset), `reveal.ts` (`maskOneLine`); `projects/stage.ts` (the C3 4-window stage), `projects/route.ts` (home ↔ detail transitions), `projects/detail.ts` (detail page field + figure).
 - The C3 stage lives in its own gsap context, built outside the chapter's (`context.ignore`), reverted once by stage.ts, and cleared after its revert (and once more as a tracked reveal after the chapter context). `PROJECT_TEXT_Q` (scroll/chapters.ts) holds the panel text windows shared by the stage, the `--scrim` scrub and `activeSafeRects`.
 
-The App's `ScrollToHash` routes every route-change scroll through these: no hash → `scrollInstant(0)` (not on POP); a jump id → `jumpToChapter`; any other hash → `jumpToY(top, () => focusQuietly(heading))`.
+The App's `ScrollToHash` routes every route-change scroll through these: no hash → `scrollInstant(0)` (PUSH / REPLACE); POP to a non-home route → `scrollInstant(saved)` for that history entry (`sessionStorage['dtw:route-y']`, location.key → y, written from `store.scroll.y` when the entry is left; 0 when none) once the lazy route has rendered; POP to home is `runArrival`'s; a jump id → `jumpToChapter`; any other hash → `jumpToY(top, () => focusQuietly(heading))`; a home hash arrival from another route that `runArrival` handles (`arrivalOwnsScroll()`) is skipped, so one scroll runs per arrival. **First load:** index.html strips the hash before the first paint (no native fragment jump; the hero paints first) and keeps it in `window.__dtwHash` (`scroll/initialHash.ts`); the pre-paint script sets no `data-intro="pending"` and the engine runs no intro when one exists. ScrollToHash waits for the first ScrollTrigger refresh with every home chapter measured and fonts loaded (3 s failsafe), then `scrollInstant(homeHashTarget(id))` + `snapFilm` (instant: the page has only shown the hero), focuses the heading quietly and restores the hash with `history.replaceState`. A visitor who has already scrolled > 40px keeps their position.
+
+`jumpCut(y, { onCut, retarget })`: when the motion preference flips while a cut still covers its scroll, `applyMotion` finishes the jump after the next refresh at `retarget() ?? y` (jumpToChapter passes `chapterTarget(id)`, so it lands in the new layout) and still runs `onCut`. `scrollInstant` and `glide` call `lenis.resize()` first, and `chapterTarget` clamps to the live document height (the cached limit can still be the previous route's right after a swap); `jumpTargets` (rail, ≤ 10 Hz) keeps the cached limit.
 
 ### UI ownership
 
@@ -323,7 +332,7 @@ Phase 2 review fixes (tuned on the same setup, measured with the canvas-only lum
 |---|---|---|---|
 | `tiers.ts` warm-up probe (`PROBE`, `probeVerdict`) | refresh interval = p10 of the 45 deltas; slow if > 25% of frames exceed 1.5 intervals, or the interval itself exceeds 1000/48 ms | p75 > 14 ms | A rAF delta never undercuts the vsync interval: at 60 Hz (external monitors, MacBook Airs) every frame is 16.7 ms however light the load, so the literal rule demoted every such High desktop to Mid. The new rule judges dropped frames; 60–144 Hz at every vsync → ok, a steady 30 fps render or ≥ 25% drops → slow. |
 | shader text-safe mask (`SAFE_ALPHA_MAX`) | α ×.22 as specced, then capped at an absolute .06 (and no extra brightness) inside a rect | ×.22 only | After `FIELD_GAIN` 3 one crisp S1 grain kept ~.4 α behind text; the sampler read up to `#5b5959` (4.3× the `#262A34` budget). With the cap the canvas-only maximum behind every hero rect stays ≤ `#222224` (L .016 vs .023; High, Mid, Low, 1440 × 900 and 390 × 844) across seg0 and the lock. |
-| shader mask feather, `[data-safe]::before` feather | smootherstep over 24px (shader) and 48px (scrim, 8 eased stops) | linear 24px / 48px | Linear ramps start and stop abruptly (Mach bands): the scrimmed blocks read as hard dark boxes. Kept at the specced widths: the hero eyebrow sits 20–50px above the name's cap line, so a wider ramp dims the particle name's top. |
+| shader mask feather, `[data-safe]::before` feather | shader: the block's rect fully masked, then a smootherstep ramp on the Euclidean distance outside it (rounded iso-lines) over a per-rect outward feather, `uSafeF`: 112px, 24px for the nav band and for `data-safe="tight"` blocks while S1 shows (their feather eases 112 → 24 with the S1 weight of the pair). Scrim: 8 eased stops over 48px across (bounded by the gutter) and 80px top / bottom (48px for tight blocks), rounded | linear 24px / 48px rect | Linear ramps start and stop abruptly (Mach bands), and even eased 24px / 48px ramps left every text block a hard dark box punched into the bokeh (final review: 6.4 vs 9.9 mean luminance, a sharp edge). The wide rounded falloff reads as a lens effect; it only dims more field, so the §2.3 budget holds. The hero eyebrow sits 20–50px above the name's cap line and the mobile lede 28px below it, hence tight while the name shows. |
 | shader loupe (`LOUPE_CORE`) | `loupe = amt · (1 − smoothstep(.35r, r, d))`; z → `uFocusZ` by .95·loupe; CoC → 1 by loupe; brightness +30% by loupe | z → 0 by .85·(1 − d/r)² | The quadratic pull only focused ~5–11 px around the pointer, under the 24 px ring: the loupe was invisible. Now the inner 35% of r (≈ 38 px at 900 px tall) is fully sharp with a soft edge. |
 | `live.glsl` scan beam | ramp + .5 within the beam (bone → ember → p-core) as well as brightness ×2.8 | brightness only | §10 "an ember scan beam", §2.1 p-core "scan flash": the brightness-only beam read as a white band on the grains. |
 
@@ -353,11 +362,11 @@ Phase 3 review fixes (same setup; canvas-only luminance sampler over the `[data-
 | `anchors.ts` `BEACON_SINK` (S9 sink) | travel and scale follow `smoothstep(.3, 1, sink)` (the beacon rides its stage first, then sets); scale × (1 − .55·e); α × k² (area-conserving, k the scale); dimmed toward ×.15 by its analytic overlap with the contact text-safe rects (box 1.45R × 1.1R, fully dimmed at 45% covered) | anchor → horizon linearly, ×.45, α ×.6 | The stage unsticks as the sink starts, so the email row and body scroll up across the beacon: it was cut flat by the scrim edge, vanished, popped back as a half-disc, and its ×.45 core (≈ 5× denser) summed to pure white under the email (canvas-only max #ffffff). Now it passes behind the text (≤ #161618 behind every contact rect at 1440×900 High) and sets as a half-disc on the ember horizon |
 | `live/s09.glsl` `uSink` | core and sparks × (1 − .8·smoothstep(0, .25, sink)) | — | The CTA disc that covers the core fades over the first quarter of the sink; a bare dense core would glare |
 | `choreo/contact.ts` disc fade | opacity 1 − smoothstep(0, .15, sink) | the first 10vh (sink .25) | Tied to the beacon's own progress: gone before the beacon leaves its stage (travel starts at .3), so the label never floats off the core (desktop and mobile) |
-| `projects/stage.ts` scrims, `uSafeW` | a panel's `[data-safe]` scrims (`--scrim`, the ::before opacity) and its mask weight ramp 0 → 1 with its text reveal (window 0: its transit-in), out with its exit; the closing card also fades out over q .02–.10 | scrim and mask switch at q .13 | An empty dark box with a hard vertical wall popped into the morph cloud at every hand-over before any text showed; the closing card ended as a 30px navy chip |
+| `projects/stage.ts` scrims, `uSafeW` | a panel's `[data-safe]` scrims (`--scrim`, the ::before opacity) and its mask weight ramp 0 → 1 with its text reveal (window 0: its transit-in), out with its exit; the closing card also fades out over q .02–.10 | scrim and mask switch at the hand-over (q .08 since the final review) | An empty dark box with a hard vertical wall popped into the morph cloud at every hand-over before any text showed; the closing card ended as a 30px navy chip |
 | `choreo/chart.ts` numerals | a bar numeral fades in over the first .05 of its window and rides its bar's grain front (`--fill`, translate by the unfilled height) until the snap; while counting, the decimal is set at .42em | numerals at the final heights throughout | "0 / 0 / 0" hung over empty columns for half the Pour and later counts sat on the falling stream; full-size "1.4" is wider than a bar pitch, so riding counts collided |
 | `index.css` `low:` (height ≤ 760px), About / Capabilities | Capabilities: statement cap 4.6svh, rows py .75svh, description lead-in .6svh and line-height 1.5, list gap 2svh; About: statement cap 6.2svh, `--label-gap` 14px, stat notes 13px / 1.35 | — | Real laptop viewports (1366×657, 1536×730, 1280×720, 1280×640) fell back to flow by a few px (About's stat row, Capabilities' 3-line statement); now every one stays sticky (fit-guard need ≤ 100svh, doc 12.30 vh). Add them to the phase-4 QA matrix |
 | `live/s10.glsl` charge | line and ghosts α ×4, halo ×2.4 at uCharge 1, halo / ghosts lifted ≤ .1 toward p-signal | — | With the global bokeh falloff (tuned for S0) the defocused rest line emitted more light than the focused one: the hover read as the signal fading (−65%). Focused line energy now ≥ rest (band mean 11.9 vs 11.3 above background) |
-| `s02-chart.ts` steel slabs | ramp .22, fill α .38, edges α .75; the 6+ bar's 2-year line a signal seam at α 1 | steel p-steel, fill .55, edge .9 | Additive steel and signal read as the same grey; the stacked bar now visibly splits (steel/signal luminance .63 vs .77 before, plus the seam) |
+| `s02-chart.ts` steel slabs | p-steel (ramp .25), fill α .5, edges α .9; the 6+ bar's 2-year line a signal seam at α 1 | steel p-steel, fill .55, edge .9 | Phase 3 dropped them to ramp .22 / .38 / .75 because additive steel and signal read as the same grey; the final review found that too dark (dim grey-brown dust, rgb(64,69,80), not matching the legend's #8c97ad swatch). p-steel at .5 / .9 keeps the hue split, and the signal seam keeps the stack split |
 | `projects/detail.ts` peek | the peek also tweens `detailFx.restore` → .5 (the commit to 1) | only m .25 | At the page end the emblem sat at α .25 half under the nav band: a 25% morph there was invisible |
 | `About.tsx` statement | `text-balance`; the accent phrase `nowrap` on phones and from 1200px up | — | "decisions" was a one-word widow split from its accent at 1440 |
 
@@ -376,3 +385,43 @@ Generator-phase deviations (measured by each state's agent and kept; the source 
 | S10 | ECG shifted so R sits at the screen centre; ghost α ×2 (the head's trail, the beat's echo); a comet tail on the head; line α normalised per CSS px and tier point area; line depth σ .6 su with the perspective divided out in live(), so depth only blurs. |
 | C1–C5 | Stat blocks and capability rows respond to hover / click only (the spec makes them aria-hidden / non-focusable; keyboard users get the table and scroll activation). Numerals show one decimal (set at .42em) while counting, and ride their bar's grain front. Contact ignition may fire at a nav jump cut's snap. |
 | C3 | The curtain clips an inner `[data-card-clip]` frame and the ember glow is its own layer (a clip-path on the link cut its focus ring and glow); the title line mask splits the `<a>` itself; arrivals run from `Projects.tsx` in a layout effect. |
+
+Phase 4 (Canvas2D fallback, context loss, adaptive, mobile slot layout; 390×844, 360×640, 375×548, 820×1180, 844×390 Low and the desktop matrix):
+
+| Where | Value | Spec | Why |
+|---|---|---|---|
+| `anchors.ts` `SLOT_CARRY` / `slotCarry` (mobile home film) | fade .25, band .1, hang 44px | anchors follow their slot | Replaces desktop `hangInView` on mobile. When the outgoing shape has scrolled off before a segment starts it is moved into the incoming slot while off-screen, fades in over the first 25% of the segment and morphs in place as the slot rises (100% → 40%); when it is still on screen the grains flow directly (outgoing waits under the nav band, incoming is held above the fold). A hidden slide-back band keeps reverse scrolls from popping. Mid-transition frames were empty before. |
+| `segments.ts` `MOBILE_POUR` | chart slot top 80% → 20% | 100% → 40% (§4.3) | The bars landed out of view |
+| `segments.ts` `MOBILE_SPIRAL_FROM` | contact top 60% → 0% | 100% → 0% | The beacon formed out of view |
+| `anchors.ts` `CONTACT_HEAD` | {.6, .35} | — | The mobile contact header's scrim and text-safe mask ramp in with its line masks instead of an empty dark box during the spiral |
+| `input.ts` tap ripple amplitude | 1.6 | 1 (§3.7) | Invisible over the resting noise at 1 |
+| `layout.ts` beacon `mobileShort` (height < 600) | ×.8 at 44svh | — | 375×548 and 360×560 stay sticky (with `Contact.tsx` `--disc-gap` / `--shell-gap`) |
+| `fallback2d.ts` `FALLBACK.maxPixels` | 2.1 M backing-store pixels | — | Software raster of a 5 MP canvas: 50–126 ms per wheel frame at 1440×900 DPR 2; 0 long tasks after |
+| `fallback2d.ts` exposure | structure α normalised to .9 across states; group-focus floor .75; always Low-tier generation | — | A sparse 1,819-dot subsample must still read each plate |
+| `anchors.ts` `MASK_LEAD` (C3 panel text-safe weights) | .5: full weight over the first half of a reveal, released over the last half of an exit | ramps with the reveal / exit windows | The staggered fade-ups are readable before the window ends; a linear mask let grains reach L .219 behind the half-revealed MCP App panel (budget .0232). After: worst L .0225 desktop, .0212 mobile |
+| `anchors.ts` `restRect` (safe-rect measure) | `[data-safe]` rects are measured minus the element's own translate | raw layout rect | Refresh ran while reveals parked blocks at `y: 16` (the MCP caption): the mask sat 16px low for the whole hold |
+| `choreo.ts` `INTRO_SCROLL_SKIP_PX` | any scroll > 4px from where the intro started ends it | wheel / touch / key / pointerdown | A hash, restore or script jump during the intro left the film on S0 → S1 over another chapter for the rest of the intro |
+| `engine.ts` `precompile` | `renderer.compileAsync(scene, camera)` during boot when `KHR_parallel_shader_compile` exists; ready waits for it | — | Takes the program link out of the ready frame on GPUs (the 355–473 ms load task on SwiftShader stays: no such extension there) |
+
+Final review fixes (headless Chromium, SwiftShader, `.qa/fin/`):
+
+| Where | Value | Spec | Why |
+|---|---|---|---|
+| `chapters.ts` `PROJECT_TEXT_Q` / `PROJECT_SWITCH_Q`, `ProjectPanel` panel opacity | exit q 0–.10, `data-active` switch .08, reveal .08–.24; the stuck panels crossfade over 300 ms (`transition-opacity`) | exit, then reveal (§5 C3) | The sequence left an empty frame (chrome labels and a haze) at every hand-over |
+| `uniforms.ts` S7 `enter.turb` | .15 | .4 (tuned earlier) | Prmpt → MCP passed through a formless haze |
+| `segments.ts` `MOBILE_PROJECT_TO` | mobile S4 → S5 → S6 → S7 segments end at slot top 60% | 100% → 40% (§4.3) | Half a screen of dust at each mobile hand-over |
+| `anchors.ts` `CURTAIN` / `curtainScale` | S4–S6 curtain scale ≤ the room between the gutter and 100vw − 56px (≈ ×1.3 at 1440) | ×1.6 | The Pulse bubble ran off the right edge under the rail; the Gov lattice reached the left viewport edge |
+| `live/s04.glsl`, `live/s05.glsl` under `uDisperse` | the ECG trace, ghosts and spike, and the lattice steps (rows ≤ 7), fade over disperse .3 → .6 | — | Stray ECG segments either side of the open card; a dot-matrix carpet under it |
+| `live/s08.glsl` `STACK_REST_EDGE`, `field.vert.glsl` stack CoC | resting plates' edges ×2.3; +.6 CoC | +1.2 CoC | Only the active plate read; the stack looked like one plate |
+| `anchors.ts` `hangInView` | never S1 | — | 'WEBB' clamped under the nav band beside the lede and CTAs during the Pour |
+| `live.glsl` S1 halo | `HALO_EDGE_SIZE` 6.0 / α .042 (Low 4.2 / .045) | §3.10 ×1.5 / α .45 | ×4.2 / α .085 sprites stayed discrete: the printed name looked eroded |
+| `uniforms.ts` S1 idle amp | .0015 su | .003 (tuned earlier) | Moved the name's centroid up to 2px over time (§12 item 4) |
+| `name-sampler.ts` baseline | the probe baseline snapped to device pixels | — | Chromium paints text on a snapped baseline: 1440 × 900 sat 0.5px higher than the DOM |
+| `s02-chart.ts` `STEEL_SLAB` | see the phase 3 row | — | — |
+| `layout.ts` S2 desktop baseline | min(80svh, 100svh − 180px) | 80svh | The bar notes ended 20px above the fold at 1280 × 720 |
+| `useChapter.ts` statements (`data-reveal-timed`) | About, Capabilities and Contact statements line-mask time-based (700 ms, 90 ms stagger) and reverse above their start | scrubbed | A paused scroll left sliced glyphs and rows of i-dots |
+| `projects/stage.ts` MCP caption box | opacity 1 → 0 over capabilities top 80% → 62% (the first 20% of seg7) | — | "Screenshot coming soon" floated alone over the haze after the constellation left |
+| `detailField.ts` | α .25 by 60svh, .12 by 120svh | .25 by 100svh | The emblem stayed bright beside the screenshot and the lede |
+| `field.vert.glsl` highlight cap | brightness gains capped to 1 as the anchor α falls below .6 (fully under .2) | — | The ECG's ember head still read at α .25 on the detail page |
+| `index.css` `field-s2:` … `no-field-s10:` | also match `data-field="fallback"` | live only | The fallback drew S4–S9 while their DOM stand-ins stayed visible: a double exposure |
+

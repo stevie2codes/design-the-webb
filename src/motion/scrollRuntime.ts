@@ -38,6 +38,7 @@ import {
   GLIDE_S,
   JUMP_CUT_FADE,
   jumpCutOverlay,
+  onScrollRefresh,
   runSamplers,
   samplerCount,
   subscribeScroll,
@@ -207,8 +208,13 @@ function destroyLenis(): void {
  * The engine's `setMode` is the field host's job (step 5).
  */
 function applyMotion(pref: MotionPref): void {
+  // A jump cut still covering its scroll: finish the jump in the new layout
+  // (after the refresh below) rather than dropping it, so the nav click still
+  // lands and focus still moves.
+  const pending = cut && cutPending ? cutPending : null;
   cut?.kill();
   cut = null;
+  cutPending = null;
   const overlay = jumpCutOverlay();
   if (overlay) overlay.style.opacity = '0';
   endRewind();
@@ -224,6 +230,15 @@ function applyMotion(pref: MotionPref): void {
   store.scroll.vel = 0;
   restartSampler();
   requestRefresh();
+  if (pending) {
+    const off = onScrollRefresh(() => {
+      off();
+      const y = pending.opts.retarget?.() ?? pending.y;
+      scrollInstant(y);
+      snapFilm(store);
+      pending.opts.onCut?.();
+    });
+  }
 }
 
 function applyLayout(): void {
@@ -287,6 +302,7 @@ function stop(): void {
   while (offs.length) offs.pop()?.();
   cut?.kill();
   cut = null;
+  cutPending = null;
   endRewind();
   destroyLenis();
   detachNative();
@@ -327,6 +343,7 @@ export function scrollInstant(y: number): void {
       lenis.stop(); // resets the running animation
       lenis.start();
     }
+    lenis.resize(); // the limit is re-measured on a debounced observer: a route swap may have left it stale
     lenis.scrollTo(y, { immediate: true, force: true });
     store.scroll.y = lenis.animatedScroll;
   } else {
@@ -345,6 +362,7 @@ export function glide(y: number, opts: GlideOptions = {}): void {
     return;
   }
   endRewind();
+  lenis.resize();
   lenis.scrollTo(y, {
     duration: opts.duration ?? GLIDE_S,
     easing: easeInOut(),
@@ -354,10 +372,13 @@ export function glide(y: number, opts: GlideOptions = {}): void {
 }
 
 let cut: gsap.core.Timeline | null = null;
+/** The running cut's target, until its scroll has happened. */
+let cutPending: { y: number; opts: JumpCutOptions } | null = null;
 
 export function jumpCut(y: number, opts: JumpCutOptions = {}): void {
   cut?.kill();
   cut = null;
+  cutPending = null;
   if (!lenis) {
     scrollInstant(y);
     snapFilm(store);
@@ -373,7 +394,9 @@ export function jumpCut(y: number, opts: JumpCutOptions = {}): void {
   });
   if (o) tl.to(o, { opacity: 1, duration: JUMP_CUT_FADE.in, ease: EASE.none, overwrite: true });
   else tl.to({}, { duration: JUMP_CUT_FADE.in });
+  cutPending = { y, opts };
   tl.call(() => {
+    cutPending = null;
     scrollInstant(y);
     snapFilm(store);
     opts.onCut?.();
@@ -419,6 +442,7 @@ function endRewind(): void {
 export function rewind(opts: GlideOptions = {}): void {
   cut?.kill();
   cut = null;
+  cutPending = null;
   const overlay = jumpCutOverlay();
   if (overlay) overlay.style.opacity = '0';
   if (!lenis) {

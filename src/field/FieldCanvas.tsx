@@ -31,8 +31,14 @@ type IdleWindow = Window & {
  * - Forwards the motion preference to `handle.setMode` (§8.2 step 5).
  * - Every scroll write invalidates the field (§9.5: under reduced motion
  *   there is no loop, frames render on demand).
- * - No renderer (kind 'none': no WebGL2, software GL, a failed chunk):
- *   `store.mode = 'css'`; the canvas stays transparent over the CSS glow.
+ * - No WebGL2 (or only software GL), a feeble device, a failed engine
+ *   chunk: the Canvas2D fallback (kind 'canvas2d', field/fallback2d.ts)
+ *   draws on this same canvas — or on an overlay it adds inside #field-root
+ *   when the host already holds a WebGL context — and sets
+ *   html[data-field="fallback"] and `store.mode` ('fallback' | 'reduced').
+ *   A lost WebGL context is covered the same way by the engine (§8.4).
+ * - No renderer at all (kind 'none': Canvas2D failed too): `store.mode =
+ *   'css'`; the canvas stays transparent over the CSS glow.
  * - Forced colors (`forced-colors: active`): no field at all, like the CSS
  *   path — it never boots, and one that is running is released when the
  *   mode turns on (booted again when it turns off). index.css hides the

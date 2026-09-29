@@ -16,7 +16,7 @@
  * the DOM (refresh / resize time); everything else is pure and
  * allocation-free (safe to call from the render loop).
  */
-import { anchorFor, resolveAnchor } from '../field/layout.ts';
+import { anchorFor, CARD, resolveAnchor } from '../field/layout.ts';
 import { STATE_COUNT, StateId } from '../field/states/ids.ts';
 import { LIMITS } from '../field/uniforms.ts';
 import { PROJECT_SWITCH_Q, PROJECT_TEXT_Q, PROJECT_WINDOW_VH, type ChapterId } from './chapters.ts';
@@ -27,6 +27,15 @@ import { store, type ChapterRecord, type FieldStore, type SafeRectBuffer, type V
 export const NAV_BAND_PX = { desktop: 64, mobile: 56 } as const;
 /** Feather of the shader's text-safe mask (§2.3); rects this far off-screen still count. */
 export const SAFE_FEATHER_PX = 24;
+/**
+ * Text-safe feathers (tuned, CONTRACTS.md): the shader's mask is a rounded
+ * rect with a smootherstep ramp this far OUTSIDE each block — wide, so the
+ * dimming reads as a soft lens falloff instead of a dark box cut into the
+ * field. The nav band, and `data-safe="tight"` blocks while the S1 name
+ * shows (the hero eyebrow sits 20–50px above its cap line, the mobile lede
+ * 28px below it), keep the narrow SAFE_FEATHER_PX.
+ */
+export const SAFE_FEATHER = { soft: 112, tight: SAFE_FEATHER_PX } as const;
 
 /**
  * Viewport top of a chapter's anchor frame at scrollY `y` (§9.6):
@@ -71,6 +80,23 @@ const parseStateKey = (key: string | undefined): StateId | null => {
 };
 
 /**
+ * REFRESH ONLY. A `[data-safe]` block's resting box: its layout rect minus
+ * its OWN translate. Reveals park blocks at an offset (`y: 16` until the
+ * fade-up, the exits' `EXIT_Y`) while the refresh measures, so the raw
+ * rect would sit that far from where the text rests on screen.
+ */
+function restRect(el: HTMLElement): { left: number; top: number; right: number; bottom: number; width: number; height: number } {
+  const r = el.getBoundingClientRect();
+  const t = getComputedStyle(el).transform;
+  if (!t || t === 'none') return r;
+  const m = new DOMMatrixReadOnly(t);
+  const dx = m.m41;
+  const dy = m.m42;
+  if (dx === 0 && dy === 0) return r;
+  return { left: r.left - dx, top: r.top - dy, right: r.right - dx, bottom: r.bottom - dy, width: r.width, height: r.height };
+}
+
+/**
  * REFRESH ONLY (§9.3 onRefresh). Measure every visible
  * `[data-field-anchor="Sx"]` and `[data-safe]` inside `stageEl` in the
  * chapter's frame and write them to `s.anchors` / `s.safe` (replacing this
@@ -100,7 +126,7 @@ export function registerChapterRects(id: ChapterId, stageEl: HTMLElement, s: Fie
 
   s.safe = s.safe.filter((r) => r.chapter !== id);
   for (const el of stageEl.querySelectorAll<HTMLElement>('[data-safe]')) {
-    const r = el.getBoundingClientRect();
+    const r = restRect(el);
     if (r.width === 0 || r.height === 0) continue;
     const panelEl = el.closest<HTMLElement>('[data-panel]');
     const panel = panelEl ? Number(panelEl.dataset.panel) - 1 : NaN;
@@ -111,6 +137,7 @@ export function registerChapterRects(id: ChapterId, stageEl: HTMLElement, s: Fie
       x1: r.right - origin.left,
       y1: r.bottom - origin.top,
       ...(Number.isInteger(panel) && panel >= 0 ? { panel } : {}),
+      ...(el.dataset.safe === 'tight' ? { tight: true } : {}),
     });
   }
 }
@@ -126,7 +153,7 @@ export function registerPageRects(root: HTMLElement, s: FieldStore = store): voi
   s.safe = s.safe.filter((r) => r.chapter !== 'page');
   const y = window.scrollY;
   for (const el of root.querySelectorAll<HTMLElement>('[data-safe]')) {
-    const r = el.getBoundingClientRect();
+    const r = restRect(el);
     if (r.width === 0 || r.height === 0) continue;
     s.safe.push({ chapter: 'page', x0: r.left, y0: r.top + y, x1: r.right, y1: r.bottom + y });
   }
@@ -230,6 +257,26 @@ function contactTextOverlap(s: FieldStore, x: number, y: number, rx: number, ry:
   return Math.min(1, covered / (4 * rx * ry));
 }
 
+/** The curtain halo's §5 C3 scale (×1.6) and the band it must stay in: right of the gutter, left of the rail. */
+export const CURTAIN = { scale: 1.6, railBandPx: 56 } as const;
+
+/**
+ * The C3 curtain scale of S4–S6 about their card centre `x` (tuned, final
+ * review): ×1.6, clamped so the emblem (CARD.emblemFill of its box) stays
+ * within [gutter, 100vw − rail band] — at ×1.6 the Pulse bubble ran off the
+ * right edge under the rail and the Gov lattice reached the left viewport
+ * edge (≈ ×1.3 at 1440 × 900). Mobile slots are never dispersed.
+ */
+function curtainScale(id: StateId, s: FieldStore, x: number): number {
+  const rec = s.anchors.get(id);
+  const W = s.scroll.W;
+  if (!rec || rec.w <= 0 || W <= 0) return CURTAIN.scale;
+  const gutter = Math.min(64, Math.max(20, 0.04 * W));
+  const half = (rec.w * CARD.emblemFill) / 2;
+  const room = Math.min(x - gutter, W - CURTAIN.railBandPx - x);
+  return Math.max(1, Math.min(CURTAIN.scale, room / half));
+}
+
 /**
  * The anchor transform of one pair endpoint (`uOffA/B` before pxToSu):
  * [centre x px, centre y px, scale, alpha]. Applies the beacon sink (S9 →
@@ -269,7 +316,7 @@ export function anchorTransform(id: StateId, s: FieldStore, out: Vec4, disperse 
   if (disperse > 0 && id >= StateId.PULSE && id <= StateId.CONSTELLATION) {
     if (id === StateId.CONSTELLATION) scale *= 1 + 0.15 * disperse;
     else {
-      scale *= 1 + 0.6 * disperse;
+      scale *= 1 + (curtainScale(id, s, x) - 1) * disperse;
       alpha *= 1 - 0.65 * disperse;
     }
   }
@@ -291,7 +338,10 @@ export function anchorTransform(id: StateId, s: FieldStore, out: Vec4, disperse 
  * shapes and read as an empty frame at mid-segment.
  *
  * Desktop only (mobile holds read long text below a slot that has scrolled
- * away; a hanging shape would sit over it). Never S0 (viewport), S2 (the DOM
+ * away; a hanging shape would sit over it). Never S0 (viewport), S1 (the
+ * Pour: the letters leave with the h1 and the grains fall from where the
+ * name really was — a name clamped under the nav band sat against the
+ * lede, the CTAs and the About heading in one cluttered frame), S2 (the DOM
  * axis, ticks and numerals must stay registered to the bars) or S10; S9 only
  * before the sink (which sets it behind the footer horizon) — the spiral
  * winds about S9's centre, so it now winds on screen, and S9 is back on its
@@ -302,7 +352,7 @@ export function anchorTransform(id: StateId, s: FieldStore, out: Vec4, disperse 
  */
 export function hangInView(id: StateId, s: FieldStore, out: Vec4): Vec4 {
   if (s.layout !== 'desktop' || s.route.kind !== 'home') return out;
-  if (id === StateId.STATIC || id === StateId.CHART || id === StateId.FLATLINE) return out;
+  if (id === StateId.STATIC || id === StateId.NAME || id === StateId.CHART || id === StateId.FLATLINE) return out;
   if (id === StateId.BEACON && s.fx.sink > 0) return out;
   const rec = s.anchors.get(id);
   if (!rec || rec.chapter === 'viewport') return out;
@@ -315,14 +365,149 @@ export function hangInView(id: StateId, s: FieldStore, out: Vec4): Vec4 {
   return out;
 }
 
+/**
+ * Mobile slot carry (tuning, see CONTRACTS.md). On the mobile layout every
+ * flow chapter opens with its field slot and its text follows (§4.2), so the
+ * outgoing shape has usually scrolled away a screen or more above before the
+ * next slot comes up from the bottom: a straight morph between the two
+ * streamed a thin veil of grains across the whole page (the frame was all
+ * but empty at mid-segment), and a shape that hangs in view (desktop) would
+ * sit over the text being read.
+ *
+ * Instead, when a segment's outgoing box has left the viewport (behind the
+ * nav band) by the time the segment starts, the outgoing shape is CARRIED
+ * into the incoming slot: for the whole segment it is anchored on the
+ * incoming anchor (the same centre, aspect-fit into its box), so the morph
+ * plays in place, dense and in the empty slot, while the slot rises into
+ * view (100% → 40%, the §4.3 mobile rule). The relocation happens while both
+ * positions are off-screen (the slot top is at the fold when the segment
+ * starts), and the carried shape fades in over the first `fade` of the
+ * segment — on the lesser of the scroll progress and the displayed mix — so
+ * neither a fast fling (the damped film lagging the page) nor a reverse
+ * scroll can pop it into view. Segments whose outgoing shape is still on
+ * screen when they start (the Pour out of the sticky hero; short text
+ * between two slots) keep the direct morph: the grains visibly flow from one
+ * shape down into the next. There the outgoing shape waits just out of view
+ * under the nav band (`hang`) instead of scrolling on up the page, and the
+ * incoming one is kept above the fold while its slot comes up, so the
+ * stream runs between two nearby edges, into a shape that is in view.
+ *
+ * Decided per segment on refresh (the resolved segments' identity is the
+ * cache key); per frame it is allocation-free.
+ */
+export const SLOT_CARRY = {
+  /** Fade-in of the carried shape, as a fraction of the segment. */
+  fade: 0.25,
+  /**
+   * Above a carried segment's start (fraction of 100svh): the band in which
+   * the outgoing shape slides home, invisible, and the band above it in
+   * which it fades back in (reverse scroll with the damped film lagging).
+   */
+  band: 0.1,
+  /** An outgoing box counts as gone when its bottom is above this many px past the nav band. */
+  slack: 0,
+  /**
+   * Direct segments: the outgoing box never rises past this line (px from
+   * the top; its bottom edge): out of view under the nav bar's opaque band
+   * (56px, and its scrim is opaque to 68px), so the grains it lets go of
+   * stream in from the top edge instead of from a screen above.
+   */
+  hang: 44,
+} as const;
+
+/** One flag per home film segment (S0 → S9: 9). */
+const carryFlags = new Uint8Array(9);
+let carryFor: readonly unknown[] | null = null;
+
+function carriedSegments(s: FieldStore): Uint8Array {
+  if (s.segments === carryFor) return carryFlags;
+  carryFor = s.segments;
+  carryFlags.fill(0);
+  if (s.layout !== 'mobile') return carryFlags;
+  const band = NAV_BAND_PX.mobile + SLOT_CARRY.slack;
+  for (let k = 0; k < s.segments.length && k < carryFlags.length; k++) {
+    const g = s.segments[k];
+    const ra = s.anchors.get(g.a);
+    const rb = s.anchors.get(g.b);
+    if (!ra || !rb || ra.chapter === 'viewport' || rb.chapter === 'viewport') continue;
+    const ch = s.chapters[ra.chapter];
+    if (!ch || ra.w <= 0 || ra.h <= 0 || rb.w <= 0 || rb.h <= 0) continue;
+    // A's box bottom (viewport px) at the segment's first scroll position.
+    carryFlags[k] = ra.cy + ra.h / 2 + stageTop(g.y0, ch) <= band ? 1 : 0;
+  }
+  return carryFlags;
+}
+
+/**
+ * The director, home film on the mobile layout (see SLOT_CARRY), once
+ * `offA` / `offB` hold the pair's anchor transforms:
+ * - a carried segment anchors the outgoing endpoint `offA` on the incoming
+ *   one, but only once the page has scrolled into segment `seg` (during the
+ *   hold before it, the outgoing shape stays registered to its own slot,
+ *   whatever the damped mix);
+ * - a direct segment (the outgoing shape still on screen) lets the incoming
+ *   shape rise no lower than the bottom of the viewport: its box is clamped
+ *   above the fold while its slot is still coming up, so the grains stream
+ *   into a shape that is in view, not below it. Never S2 (its DOM axis,
+ *   ticks and numerals are registered to the bars in the slot). A box that
+ *   is in view is untouched, so every hold stays registered.
+ * Allocation-free.
+ */
+export function slotCarry(seg: number, mix: number, s: FieldStore, offA: Vec4, offB: Vec4): void {
+  if (s.layout !== 'mobile' || s.route.kind !== 'home' || seg < 0 || seg >= s.segments.length) return;
+  const g = s.segments[seg];
+  const ra = s.anchors.get(g.a);
+  const rb = s.anchors.get(g.b);
+  if (!ra || !rb || rb.chapter === 'viewport') return;
+  // The outgoing shape waits just out of view, its box under the nav band,
+  // instead of scrolling on up the page: its grains enter from the top
+  // edge as soon as they leave (hidden either way, so it never shows).
+  if (ra.chapter !== 'viewport') {
+    const high = SLOT_CARRY.hang - (ra.h * offA[2]) / 2;
+    if (offA[1] < high) offA[1] = high;
+  }
+  if (!carriedSegments(s)[seg]) {
+    if (g.b === StateId.CHART || (g.b === StateId.BEACON && s.fx.sink > 0)) return;
+    const low = s.scroll.H - (rb.h * offB[2]) / 2;
+    if (offB[1] > low) offB[1] = low;
+    return;
+  }
+  // Carried. Scrolling back up with the damped film still inside the
+  // segment, the outgoing shape must get home without a jump: over the
+  // `band` above the segment's start it slides back from the slot to its
+  // own place while invisible, then fades in over the next band (it is
+  // behind the nav band or just coming out from under it there). Grains
+  // still in flight fade with it, so nothing streams or pops.
+  const y = s.scroll.y;
+  const band = SLOT_CARRY.band * s.scroll.H;
+  if (y < g.y0 - 2 * band) return;
+  if (y < g.y0 - band) {
+    offA[3] *= smoothstep(0, 1, (g.y0 - band - y) / band);
+    return;
+  }
+  const fit = Math.min(rb.w / ra.w, rb.h / ra.h);
+  const k = y < g.y0 ? (y - (g.y0 - band)) / band : 1;
+  offA[0] += (offB[0] - offA[0]) * k;
+  offA[1] += (offB[1] - offA[1]) * k;
+  offA[2] *= 1 + (fit - 1) * k;
+  const t = Math.min((y - g.y0) / Math.max(1, g.y1 - g.y0), mix);
+  offA[3] *= smoothstep(0, SLOT_CARRY.fade, t);
+}
+
 export function createSafeRectBuffer(): SafeRectBuffer {
-  return { rects: new Float32Array(LIMITS.safeRects * 4), weights: new Float32Array(LIMITS.safeRects).fill(1), count: 0 };
+  return {
+    rects: new Float32Array(LIMITS.safeRects * 4),
+    weights: new Float32Array(LIMITS.safeRects).fill(1),
+    feathers: new Float32Array(LIMITS.safeRects).fill(SAFE_FEATHER.soft),
+    count: 0,
+  };
 }
 
 const BLOCKS = LIMITS.safeRects - 1;
 const bestD = new Float64Array(BLOCKS);
 const bestR = new Float64Array(BLOCKS * 4);
 const bestW = new Float64Array(BLOCKS);
+const bestF = new Float64Array(BLOCKS);
 
 const ramp01 = (x: number): number => (x <= 0 ? 0 : x >= 1 ? 1 : x);
 
@@ -341,26 +526,56 @@ function panelTextWeight(s: FieldStore, proj: ChapterRecord, panel: number): num
     const H = s.scroll.H;
     const from = (PROJECT_TEXT_Q.first.fromPct / 100) * H;
     const to = (-PROJECT_TEXT_Q.first.toQ * PROJECT_WINDOW_VH * H) / 100;
-    w = ramp01((from - (proj.top - s.scroll.y)) / (from - to));
+    w = ramp01((from - (proj.top - s.scroll.y)) / ((from - to) * MASK_LEAD));
   } else {
     const [r0, r1] = PROJECT_TEXT_Q.reveal;
-    w = ramp01((q - r0) / (r1 - r0));
+    w = ramp01((q - r0) / ((r1 - r0) * MASK_LEAD));
   }
   if (q >= 1) {
     const [e0, e1] = PROJECT_TEXT_Q.exit;
-    w = Math.min(w, 1 - ramp01((q - 1 - e0) / (e1 - e0)));
+    const span = (e1 - e0) * MASK_LEAD;
+    w = Math.min(w, 1 - ramp01((q - 1 - (e1 - span)) / span));
   }
   return w;
 }
 
 /**
+ * The mask leads the text (tuned, CONTRACTS.md): it reaches full weight
+ * over the first half of a reveal and lets go over the last half of an
+ * exit. The staggered fade-ups (the description first) are readable well
+ * before the reveal window ends; a mask that tracked the window linearly
+ * let grains glare behind half-revealed copy (#262A34 budget, §2.3).
+ */
+const MASK_LEAD = 0.5;
+
+/**
+ * Mobile C5 header (tuned, CONTRACTS.md): its scrim and its text-safe mask
+ * come in with its line masks — over the section top moving from `from` to
+ * `to` of the viewport (choreo/contact.ts scrubs the scrim over the same
+ * window) — instead of standing as an empty dark box in the spiral before
+ * any text shows. Full weight once the stage is stuck.
+ */
+export const CONTACT_HEAD = { from: 0.6, to: 0.35 } as const;
+
+/** Mask weight of a mobile contact safe rect with bottom `y1` (stage-local): the header ramps, the rest is 1. */
+function contactHeadWeight(s: FieldStore, ch: ChapterRecord, y1: number): number {
+  const beacon = s.anchors.get(StateId.BEACON);
+  if (!beacon || beacon.chapter !== 'contact' || y1 > beacon.cy) return 1;
+  const H = s.scroll.H;
+  const top = ch.top - s.scroll.y;
+  return ramp01((CONTACT_HEAD.from * H - top) / ((CONTACT_HEAD.from - CONTACT_HEAD.to) * H));
+}
+
+/**
  * The ≤ 6 text-safe rects for this frame (§9.6), in viewport CSS px: the nav
  * band first, then the 5 on-screen `[data-safe]` blocks nearest the viewport
- * centre. In the stuck C3 stage only the active window's panel counts, with
+ * centre, with their feathers (`nameW`: the S1 name's weight in the pair,
+ * which narrows the `tight` blocks' feather). In the stuck C3 stage only the active window's panel counts, with
  * a weight that follows its text (panelTextWeight; every other rect 1).
  * Writes into `out` (allocation-free) and returns it.
  */
-export function activeSafeRects(s: FieldStore, out: SafeRectBuffer = createSafeRectBuffer()): SafeRectBuffer {
+export function activeSafeRects(s: FieldStore, out: SafeRectBuffer = createSafeRectBuffer(), nameW = 0): SafeRectBuffer {
+  const tightF = SAFE_FEATHER.soft + (SAFE_FEATHER.tight - SAFE_FEATHER.soft) * Math.min(1, Math.max(0, nameW));
   const { y, W, H } = s.scroll;
   const proj = s.chapters.projects;
   // The text-safe window switches with the panels' hand-over (q .13), not at
@@ -382,12 +597,16 @@ export function activeSafeRects(s: FieldStore, out: SafeRectBuffer = createSafeR
         if (r.panel !== win) continue;
         w = panelTextWeight(s, ch, win);
         if (w <= 0.001) continue;
+      } else if (r.chapter === 'contact' && s.layout === 'mobile') {
+        w = contactHeadWeight(s, ch, r.y1);
+        if (w <= 0.001) continue;
       }
       top = stageTop(y, ch);
     }
     const y0 = r.y0 + top;
     const y1 = r.y1 + top;
-    if (y1 < -SAFE_FEATHER_PX || y0 > H + SAFE_FEATHER_PX) continue;
+    const feather = r.tight ? tightF : SAFE_FEATHER.soft;
+    if (y1 < -feather || y0 > H + feather) continue;
     const d = Math.abs((y0 + y1) / 2 - H / 2);
     let pos: number;
     if (n < BLOCKS) pos = n++;
@@ -396,11 +615,13 @@ export function activeSafeRects(s: FieldStore, out: SafeRectBuffer = createSafeR
     while (pos > 0 && bestD[pos - 1] > d) {
       bestD[pos] = bestD[pos - 1];
       bestW[pos] = bestW[pos - 1];
+      bestF[pos] = bestF[pos - 1];
       for (let j = 0; j < 4; j++) bestR[pos * 4 + j] = bestR[(pos - 1) * 4 + j];
       pos--;
     }
     bestD[pos] = d;
     bestW[pos] = w;
+    bestF[pos] = feather;
     bestR[pos * 4] = r.x0;
     bestR[pos * 4 + 1] = y0;
     bestR[pos * 4 + 2] = r.x1;
@@ -416,6 +637,9 @@ export function activeSafeRects(s: FieldStore, out: SafeRectBuffer = createSafeR
   const ow = out.weights;
   ow[0] = 1;
   for (let k = 0; k < n; k++) ow[1 + k] = bestW[k];
+  const of = out.feathers;
+  of[0] = SAFE_FEATHER.tight;
+  for (let k = 0; k < n; k++) of[1 + k] = bestF[k];
   out.count = 1 + n;
   return out;
 }

@@ -20,7 +20,7 @@
  * H/28 tall with a 0.2svh gap that stays empty; 35% of a slab on its left,
  * right and top edges at α .9, 65% stratified jittered fill at α .55; the
  * top slab of each bar at α 1.0; tuned, CONTRACTS.md: the steel slabs are
- * cooler and quieter — ramp .22, fill α .38, edges α .75 — and the 6+ bar's
+ * p-steel, a touch quieter — fill α .5, edges α .9 — and the 6+ bar's
  * 2-year line is a bright signal SEAM, α 1, so the stack visibly splits into
  * developer years under design years; at .55 / .9 additive steel and signal
  * came out as nearly the same grey), "+" fizz 5% (2.5% over 4.0–4.5 yrs above
@@ -100,10 +100,12 @@ const DOT_ALPHA_SUM = 3;
 export const G_STRUCT = 7;
 
 /**
- * Steel slabs (developer years, g0 / g2): cooler and darker than p-steel
- * (ramp .22: toward p-noise) and quieter (tuning, see the header).
+ * Steel slabs (developer years, g0 / g2): p-steel itself (ramp .25) at fill
+ * α .5 / edges .9 (final review: at ramp .22 / .38 / .75 they rendered as
+ * dim grey-brown dust, rgb(64,69,80), and read as "empty" beside the legend's
+ * #8c97ad swatch instead of as a second, blue-grey series).
  */
-const STEEL_SLAB = { ramp: 0.22, fill: 0.38, edge: 0.75 } as const;
+const STEEL_SLAB = { ramp: RAMP.steel, fill: 0.5, edge: 0.9 } as const;
 /** The seam: the top line of the stacked bar's steel part (the 2-year line), in signal at α 1. */
 const SEAM = { ramp: RAMP.signal, alpha: 1 } as const;
 

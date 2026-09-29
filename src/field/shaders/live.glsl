@@ -25,12 +25,16 @@ struct Live {
 // the type glows. The band and the hairline keep §3.10's ×.45 / ×1.5.
 #define NAME_GRAIN_SIZE 1.45
 #define HALO_EDGE_SHARE 1.0
+// Final review: at ×4.2 / α .085 the sprites stayed discrete and the lock read
+// as speckled, eroded edges. Wider, fainter sprites (about the same light)
+// overlap into a smooth glow; the DOM edge stays clean.
 #ifdef TIER_LOW
-#define HALO_EDGE_SIZE 3.0 // larger base points and a smaller name on phones
+#define HALO_EDGE_SIZE 4.2 // larger base points and a smaller name on phones
+#define HALO_EDGE_ALPHA 0.045
 #else
-#define HALO_EDGE_SIZE 4.2
+#define HALO_EDGE_SIZE 6.0
+#define HALO_EDGE_ALPHA 0.042
 #endif
-#define HALO_EDGE_ALPHA 0.085
 #define HALO_EDGE_WARM 0.08
 
 // S1 NAME: α shimmer .8–1.0 at .3–.9 Hz; the scan beam (+180% within .02 su

@@ -147,7 +147,10 @@ export const STATE_PARAMS: Readonly<Record<StateId, StateParams>> = {
   [StateId.NAME]: {
     // §3.9 .42; tuned so the resolved name reads as bone light, not grey sand.
     density: 0.6,
-    idle: { amp: 0.003, ...IDLE_HOLD },
+    // Tuned (final review, §12 item 4): .003 su moved the whole name's
+    // centroid up to ≈ 2 px over time at 1920 × 1080; .0015 keeps the
+    // resolved grains within 1 px of the DOM glyphs.
+    idle: { amp: 0.0015, ...IDLE_HOLD },
     aperture: 0.04,
     mouse: MouseMode.PUSH,
     enter: ENTER_NAME,
@@ -194,7 +197,10 @@ export const STATE_PARAMS: Readonly<Record<StateId, StateParams>> = {
     idle: { amp: 0.004, ...IDLE_HOLD },
     aperture: 0.04,
     mouse: MouseMode.PUSH,
-    enter: { stagger: 0.35, turb: 0.4, path: PathId.DEFAULT },
+    // Tuned (final review): turb .4 → .15 — at .4 the Prmpt → MCP hand-over
+    // passed through a formless haze; the deck now stays legible until the
+    // constellation forms.
+    enter: { stagger: 0.35, turb: 0.15, path: PathId.DEFAULT },
   },
   [StateId.STACK]: {
     // §3.9 .5; tuned at integration: the isometric plates are thin hairlines

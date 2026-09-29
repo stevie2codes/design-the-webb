@@ -41,6 +41,8 @@
 // Printed records draw a touch larger than the base pinpoint (tuned, like S1's grains).
 #define LAT_RECORD_SIZE 1.35
 #define LAT_CURTAIN_SIZE 0.5
+// The steps' rows (base y 34 + 3 × 16 units, 10-unit rows): 0–7.
+#define LAT_STEP_ROWS 7.0
 #define LAT_CURTAIN_ALPHA 0.9
 
 // Printed rows at t (0–52): the CPU twin is latticeRow() in s05-lattice.ts.
@@ -66,6 +68,10 @@ void liveLattice(inout Live L, vec4 meta, vec4 off, float t) {
   L.size *= 1.0 + LAT_CURTAIN_SIZE * uDisperse;
   L.alpha *= 1.0 + LAT_CURTAIN_ALPHA * uDisperse;
   float row = floor(meta.b * (LAT_ROWS - 1.0) + 0.5);
+  // The C3 curtain: the three wide steps (rows ≤ 7) fade out as the halo
+  // opens (final review: stretched ×1.6 they became a dot-matrix carpet
+  // under the card, out to the viewport edge).
+  L.alpha *= 1.0 - step(row, LAT_STEP_ROWS) * smoothstep(0.3, 0.6, uDisperse);
   float tau = mod(t, LAT_PERIOD);
   float head = latticeHead(t);
   // Continuous head position (rows), for the cooling trail; runs on past 52 in the hold.

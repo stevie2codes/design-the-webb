@@ -32,15 +32,15 @@
  * Browser-only (handlers and effects); nothing runs at import (SSR-safe).
  * gsap is lazy (motion/lazy.ts), never imported statically.
  */
-import { getLenis, jumpCutOverlay, onScrollRefresh, scrollInstant, scrollLimit } from '../../motion/lenis';
+import { getLenis, jumpCutOverlay, onScrollRefresh, scrollInstant } from '../../motion/lenis';
 import { loadGsap } from '../../motion/lazy';
 import { isReducedMotion } from '../../motion/motionPref';
 import { getNextProject, getProject } from '../../content/projects';
 import type { StateId } from '../../field/states/ids';
 import { anchorTransform } from '../../scroll/anchors';
-import { HOME_ORDER, PROJECT_HOLD_Q, PROJECT_WINDOW_VH } from '../../scroll/chapters';
+import { HOME_ORDER, PROJECT_HOLD_Q, PROJECT_WINDOW_VH, headingId, type ChapterId } from '../../scroll/chapters';
 import { enterRoute, frame, snapFilm } from '../../scroll/director';
-import { chapterTarget, isJumpId } from '../../scroll/jump';
+import { chapterTarget, focusQuietly, isJumpId } from '../../scroll/jump';
 import { store, type RouteKind, type Vec4 } from '../../scroll/store';
 import { handoff } from '../../scroll/detailField.ts';
 
@@ -205,9 +205,17 @@ function arrivalTarget(a: Arrival): number | null {
   if (a.nav === 'POP') return readHomeY() ?? 0;
   const id = decodeURIComponent(a.hash.slice(1));
   if (!id) return 0;
+  return homeHashTarget(id, a.from === 'detail' ? (getProject(a.slug)?.index ?? 1) - 1 : 0);
+}
+
+/**
+ * The scroll target of a home `#id` (an arrival, or a first-load deep link):
+ * a nav chapter's hold start, `#projects` window `k`'s hold, any other
+ * element's top. Null when the element is not on the page.
+ */
+export function homeHashTarget(id: string, k = 0): number | null {
   if (id === 'projects') {
     const rec = store.chapters.projects;
-    const k = a.from === 'detail' ? (getProject(a.slug)?.index ?? 1) - 1 : 0;
     if (rec?.sticky) return rec.top + ((k + PROJECT_HOLD_Q) * PROJECT_WINDOW_VH * store.scroll.H) / 100;
     const panel = document.querySelector(`[data-panel="${k + 1}"]`);
     if (panel) return panel.getBoundingClientRect().top + window.scrollY;
@@ -217,6 +225,17 @@ function arrivalTarget(a: Arrival): number | null {
   const el = document.getElementById(id);
   return el ? el.getBoundingClientRect().top + window.scrollY : null;
 }
+
+/** Arrivals waiting for their resync (the scroll is theirs: ScrollToHash stays out). */
+let arrivalsWaiting = 0;
+
+/**
+ * True while a home arrival will set the scroll itself (a POP restore or a
+ * hash target), so the App's ScrollToHash does not run a second jump for the
+ * same navigation. Set from runArrival's layout effect, i.e. before any
+ * passive effect of that commit.
+ */
+export const arrivalOwnsScroll = (): boolean => arrivalsWaiting > 0;
 
 const homeMeasured = (): boolean => HOME_ORDER.every((id) => store.chapters[id] !== undefined);
 const fontsSettled = (): boolean => (document.fonts ? document.fonts.status === 'loaded' : true);
@@ -254,7 +273,10 @@ export function runArrival(a: Arrival): () => void {
     );
   };
 
+  let waiting = false;
   const stopWaiting = (): void => {
+    if (waiting) arrivalsWaiting--;
+    waiting = false;
     offRefresh?.();
     offRefresh = null;
     if (timer !== null) clearTimeout(timer);
@@ -265,12 +287,17 @@ export function runArrival(a: Arrival): () => void {
     if (!alive || done) return;
     done = true;
     stopWaiting();
-    const y = arrivalTarget(a);
     // Lenis re-measures its limit on a debounced observer: the detail page's
-    // (shorter) limit may still be cached, and scrollTo clamps to it.
+    // (shorter) limit may still be cached, and both the target clamp and
+    // scrollTo clamp to it. Re-measure first, then compute the target.
     getLenis()?.resize();
-    if (y !== null) scrollInstant(Math.max(0, Math.min(y, scrollLimit())));
+    const y = arrivalTarget(a);
+    if (y !== null) scrollInstant(Math.max(0, y)); // Lenis / the browser clamp to the (fresh) limit
     snapFilm(store);
+    // A hash arrival moves focus like an in-page jump (§4.4, §8.1): the
+    // chapter heading, or the element itself.
+    const id = a.nav === 'POP' ? '' : decodeURIComponent(a.hash.slice(1));
+    if (id) focusQuietly(document.getElementById(headingId(id as ChapterId)) ?? document.getElementById(id));
     reveal(ROUTE_FX.restoreFade);
   };
 
@@ -292,6 +319,8 @@ export function runArrival(a: Arrival): () => void {
     const check = (): void => {
       if (homeMeasured() && fontsSettled()) resync();
     };
+    waiting = true;
+    arrivalsWaiting++;
     offRefresh = onScrollRefresh(check);
     timer = setTimeout(resync, ROUTE_FX.measureTimeout * 1000);
   }

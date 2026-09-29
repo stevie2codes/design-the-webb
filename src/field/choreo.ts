@@ -37,6 +37,8 @@ export const PRINT = { beam: DUR.scan, relax: 0.5, unprint: 0.12 } as const;
 const INTRO_KEY = 'dtw:intro';
 /** The intro clock advances at most this much per tick (ms). */
 const INTRO_MAX_STEP_MS = 50;
+/** A scroll this far from where the intro started (px) ends it, input event or not. */
+const INTRO_SCROLL_SKIP_PX = 4;
 
 type Timeline = ReturnType<typeof gsap.timeline>;
 
@@ -65,6 +67,7 @@ export class Choreo {
   private printTl: Timeline | null = null;
   private introTl: Timeline | null = null;
   private introOverride: FilmOverride | null = null;
+  private introY = 0;
   private introResolve: (() => void) | null = null;
   private introPromise: Promise<void> | null = null;
   private unlisten: (() => void) | null = null;
@@ -103,6 +106,7 @@ export class Choreo {
     this.live = true;
     const ov: FilmOverride = { a: StateId.STATIC, b: StateId.NAME, m: 1, snap: true };
     this.introOverride = ov;
+    this.introY = store.scroll.y;
     store.film.override = ov;
     store.flags.intro = true;
     store.fx.printed = 1;
@@ -159,6 +163,13 @@ export class Choreo {
   private readonly stepIntro = (_time: number, deltaMs: number): void => {
     const tl = this.introTl;
     if (!tl) return;
+    // Any scroll without an input event (a hash / nav jump, scroll
+    // restoration, a script, a scrollbar drag) also ends it: the override
+    // would otherwise hold S0 → S1 over a page that has left the hero.
+    if (Math.abs(store.scroll.y - this.introY) > INTRO_SCROLL_SKIP_PX) {
+      this.skipIntro();
+      return;
+    }
     tl.time(tl.time() + Math.min(deltaMs, INTRO_MAX_STEP_MS) / 1000);
   };
 

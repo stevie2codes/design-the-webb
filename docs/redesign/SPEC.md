@@ -1768,5 +1768,8 @@ All copy is **verbatim or tightened** from `HomePage.tsx`, `projects.ts`, `Foote
 - "404 — Signal lost"
 - "Stephen Webb — Senior Product Designer" (portrait caption)
 - "Skip to content"
-- The nav labels
+- The nav labels, including "Email ↗", "Menu" / "Close" and the collapsed wordmark "SW"
 - "01 / 04"
+- Accessible names and alt text (no visible text, no factual claims): "Email stephen@designthewebb.com" (nav Email), "Email me — stephen@designthewebb.com" (beacon CTA), "Portrait of Stephen Webb" / "Stephen Webb" (photo alts), "{title} screenshot", "{title} — project details", "{title} live site", "{title} source on GitHub"
+- Rail tick labels "Title", "About", "Work", "What I do", "Contact", and their accessible names "Go to title" … "Go to Contact"
+- Cursor ring labels "Open" / "Live"

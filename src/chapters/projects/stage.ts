@@ -21,11 +21,12 @@
  * | q            | Window 0 (Pulse)                        | Windows 1–3                                    |
  * |--------------|-----------------------------------------|------------------------------------------------|
  * | transit      | text in: section top 30% → stuck q .10  | —                                              |
- * | 0–.12        | —                                       | card k−1 closes to inset(50%), scale .96 (and   |
+ * | 0–.10        | —                                       | card k−1 closes to inset(50%), scale .96 (and   |
  * |              |                                         | fades out over .02–.10); its text exits (with   |
  * |              |                                         | its scrim); fx.disperse 1 → 0                   |
- * | .13          | —                                       | data-active hands over (counter rolls, 400 ms) |
- * | .14–.30      | —                                       | index + title line masks; description, chips   |
+ * | .08          | —                                       | data-active hands over (counter rolls, 400 ms; |
+ * |              |                                         | the panels crossfade over 300 ms)              |
+ * | .08–.24      | —                                       | index + title line masks; description, chips   |
  * |              |                                         | and links fade up 16px (stagger .03); the text |
  * |              |                                         | blocks' scrims fade in with them (--scrim)     |
  * | .40/.42–.55/.56 | CURTAIN: fx.disperse 0 → 1 (emblem ×1.6, α ×.35 — a halo round the card);  |
@@ -207,7 +208,9 @@ export function projectsChoreo(ctx: ChapterContext, opts: StageOptions): () => v
   const captions = panels.flatMap((p) => (p.caption ? [p.caption] : []));
   const rows = panels.flatMap((p) => (p.rows ? [p.rows] : []));
   const exits = panels.flatMap((p) => p.exits);
-  const touched = [...cards, ...clips, ...glows, ...captions, ...rows, ...exits];
+  // The MCP caption's box (caption + its stand-in window): fades with seg7.
+  const captionBox = panels[panels.length - 1]?.caption?.parentElement ?? null;
+  const touched = [...cards, ...clips, ...glows, ...captions, ...rows, ...exits, ...(captionBox ? [captionBox] : [])];
 
   /** The stuck stage: initial states, window 0's scrim, and the 4-window timeline (built in its own context). */
   const stageTimeline = (): void => {
@@ -272,6 +275,22 @@ export function projectsChoreo(ctx: ChapterContext, opts: StageOptions): () => v
         tl.to(p.rows, { opacity: 0, duration: STAGE_Q.rowsOut[1] - STAGE_Q.rowsOut[0] }, k + STAGE_Q.rowsOut[0]);
       }
     });
+    // The MCP caption labels the constellation: it fades out over the first
+    // 20% of seg7 (S7 → S8, capabilities top 80% → −10% of the viewport:
+    // segments.ts), so it never floats alone over the haze once the stage
+    // scrolls away. Its box, not the caption: the timeline owns the caption's
+    // own opacity.
+    const caps = document.getElementById('capabilities');
+    if (captionBox && caps) {
+      prime(
+        gsap.fromTo(
+          captionBox,
+          { opacity: 1 },
+          { opacity: 0, ease: 'none', immediateRender: false, scrollTrigger: { trigger: caps, start: 'top 80%', end: 'top 62%', scrub: true } },
+        ),
+      );
+    }
+
     // Pin the timeline to exactly four windows (t = 4 × progress).
     tl.set({}, {}, WINDOWS);
     // Initialise every tween now, in this context (§8.5: no computed-style

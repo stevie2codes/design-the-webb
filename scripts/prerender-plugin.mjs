@@ -7,6 +7,8 @@
 //   dist/work/<slug>.html      "/work/<slug>"   (extensionless URLs resolve to .html
 //                                                on Netlify and in `vite preview`)
 //   dist/404.html              any unknown path (Netlify serves it with status 404)
+//   dist/work/404.html         any unknown /work/<slug> ("Project not found";
+//                              public/_redirects serves it with status 404)
 // #root gets the markup plus data-ssr="<route key>", and <title> the route's
 // title; main.tsx hydrates when the key matches the URL.
 //
@@ -19,6 +21,28 @@ import { createServer } from 'vite';
 
 const ROOT_TAG = '<div id="root"></div>';
 const escapeHtml = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+const SITE_ORIGIN = 'https://designthewebb.com';
+
+/**
+ * Per-route share metadata: og:title / twitter:title follow the route's
+ * <title>; og:url and <link rel="canonical"> point at the route's own URL.
+ * The 404 files keep the home og:url and get no canonical (they are served
+ * for every unknown path).
+ * @param {string} template
+ * @param {{ url: string, key: string, title: string }} page
+ */
+function withRouteMeta(template, page) {
+  const title = escapeHtml(page.title);
+  let html = template
+    .replace(/(<meta property="og:title" content=")[^"]*(")/, `$1${title}$2`)
+    .replace(/(<meta name="twitter:title" content=")[^"]*(")/, `$1${title}$2`);
+  if (page.key === '404' || page.key === 'project-404') return html;
+  const url = page.url === '/' ? SITE_ORIGIN : `${SITE_ORIGIN}${page.url}`;
+  html = html.replace(/(<meta property="og:url" content=")[^"]*(")/, `$1${escapeHtml(url)}$2`);
+  if (!html.includes('rel="canonical"')) html = html.replace('</title>', `</title>\n    <link rel="canonical" href="${escapeHtml(url)}" />`);
+  return html;
+}
 
 /** @returns {import('vite').Plugin} */
 export default function prerender() {
@@ -49,7 +73,7 @@ export default function prerender() {
         const { prerenderAll } = await server.ssrLoadModule('/src/entry-server.tsx');
         const pages = await prerenderAll();
         for (const page of pages) {
-          const html = template
+          const html = withRouteMeta(template, page)
             .replace(ROOT_TAG, `<div id="root" data-ssr="${escapeHtml(page.key)}">${page.html}</div>`)
             .replace(/<title>[^<]*<\/title>/, `<title>${escapeHtml(page.title)}</title>`);
           const file = join(outDir, page.file);
@@ -77,6 +101,8 @@ export default function prerender() {
         const base = path.replace(/\/+$/, '');
         if (existsSync(join(outDir, `${base}.html`))) {
           req.url = `${base}.html${query ? `?${query}` : ''}`;
+        } else if (/^\/work\/[^/]+$/.test(base) && existsSync(join(outDir, 'work/404.html'))) {
+          req.url = '/work/404.html';
         } else if (existsSync(join(outDir, '404.html'))) {
           req.url = '/404.html';
         }

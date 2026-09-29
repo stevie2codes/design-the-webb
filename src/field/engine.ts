@@ -34,6 +34,7 @@ import { GeneratorClient, type GenJob } from './generation.ts';
 import { Choreo, INTRO } from './choreo.ts';
 import { attachInput } from './input.ts';
 import type { DebugOverlay } from './debug.ts';
+import type { LossFallback } from './fallback2d.ts';
 import { clearIntroPending } from './index.ts';
 import type { CreateField, FieldBootOptions, FieldHandle, FieldMode, FieldStats, PauseReason } from './index.ts';
 
@@ -142,11 +143,22 @@ class FieldEngine {
   private mode: FieldMode;
   private readonly pauses = new Map<PauseReason, number>();
   private ready = false;
+  /** The programs are linked (compileAsync, kicked off at boot): the ready frame never links them. */
+  private compiled = false;
   private readonly readyCbs = new Set<() => void>();
   private disposed = false;
   private lost = false;
   private lossCount = 0;
   private dead = false;
+  /**
+   * §8.4 context loss: the Canvas2D fallback (fallback2d.ts, loaded on the
+   * first loss) on an overlay canvas, painted by this loop from the cached
+   * arrays while the context is gone — and for good after a second loss.
+   */
+  private fb: LossFallback | null = null;
+  private fbLoading = false;
+  /** QA (`?debug`): synthetic ms added to what the probe and the governor measure. */
+  private slowMs = 0;
 
   /** Canvas CSS size (100% × 100lvh). */
   private W = 0;
@@ -242,8 +254,11 @@ class FieldEngine {
     const tierNow = () => this.tier;
     const readyNow = () => this.ready;
     const introNow = () => this.choreo.introRunning;
+    const kindNow = () => (this.lost || this.dead ? 'canvas2d' : 'webgl');
     this.handle = {
-      kind: 'webgl',
+      get kind() {
+        return kindNow();
+      },
       get tier() {
         return tierNow();
       },
@@ -284,6 +299,9 @@ class FieldEngine {
         else this.choreo.printOff();
       },
       stats: () => this.stats(),
+      debugSlowFrames: (ms) => {
+        if (getDebugParams().debug) this.slowMs = Math.max(0, ms);
+      },
     };
   }
 
@@ -343,6 +361,12 @@ class FieldEngine {
     for (const id of first) this.requested.add(id);
     this.requested.add(StateId.NAME);
     this.deferredHome = on404 ? WORKER_BOOT_ORDER.filter((id) => !first.includes(id)) : null;
+    // Link the field (and glow) programs now, while the worker generates and
+    // the fonts load, not inside the ready frame's task (§8.5 TBT): with
+    // KHR_parallel_shader_compile the driver links off the main thread.
+    // (Headless SwiftShader has no such extension: there the first draw
+    // still links them, so the QA profile shows that one task.)
+    const compiling = this.precompile();
 
     const fontReady = await waitForNameFont();
     if (this.disposed) return;
@@ -351,7 +375,24 @@ class FieldEngine {
     this.setName(this.sampleNameInto(this.set, view));
     if (!fontReady) this.listenForFont();
     this.onSetChanged();
+    await compiling;
+    if (this.disposed) return;
     this.maybeReady();
+  }
+
+  /**
+   * compileAsync over the scene (field + glow when on); never rejects.
+   * Without KHR_parallel_shader_compile it would gain nothing (and three
+   * warns): the first frame links the programs as before.
+   */
+  private async precompile(): Promise<void> {
+    try {
+      const parallel = this.gl.getExtension('KHR_parallel_shader_compile') !== null;
+      if (parallel && !this.dead && !this.lost) await this.renderer.compileAsync(this.scene, this.camera);
+    } catch (e) {
+      console.warn('[field] precompile failed; the first frame links the programs', e);
+    }
+    this.compiled = true;
   }
 
   private viewport(): GenViewport {
@@ -513,9 +554,14 @@ class FieldEngine {
   private onSetChanged(): void {
     setFilmCeiling(Math.max(0, this.set.ceiling()));
     // CSS stand-ins (the chart's SVG bars, emblem outlines…) stay until
-    // their state is actually drawn: html[data-field-states~="k"].
+    // their state is actually drawn: html[data-field-states~="k"]. While the
+    // Canvas2D fallback covers a lost context, S2 is left out: §8.4 keeps the
+    // chart's SVG bars there (fallback2d.ts fallbackStatesAttr).
+    const skip = this.lost || this.dead ? StateId.CHART : -1;
     let ids = '';
-    for (let id = 0; id <= StateId.FLATLINE; id++) if (this.set.has(id as StateId)) ids += ids ? ` ${id}` : `${id}`;
+    for (let id = 0; id <= StateId.FLATLINE; id++) {
+      if (id !== skip && this.set.has(id as StateId)) ids += ids ? ` ${id}` : `${id}`;
+    }
     if (ids !== this.statesAttr) {
       this.statesAttr = ids;
       html().setAttribute('data-field-states', ids);
@@ -526,14 +572,17 @@ class FieldEngine {
   }
 
   private maybeReady(): void {
-    if (this.ready || this.disposed || !this.set.has(StateId.STATIC) || !this.set.has(StateId.NAME)) return;
+    if (this.ready || this.disposed || !this.compiled || !this.set.has(StateId.STATIC) || !this.set.has(StateId.NAME)) return;
     this.ready = true;
     this.onSetChanged();
 
     const heroP = store.chapters.top
       ? store.chapters.top.progress
       : window.scrollY / Math.max(1, (CHAPTERS.top.L / 100) * window.innerHeight);
+    // A context lost before the first frame: the fallback shows, no intro.
+    const gl = !this.lost && !this.dead;
     const intro =
+      gl &&
       this.opts.intro &&
       this.mode === 'full' &&
       store.route.kind === 'home' &&
@@ -554,14 +603,14 @@ class FieldEngine {
       // holds the scroll cue and the HUD); it will not run.
       clearIntroPending();
       this.renderNow();
-      gsap.to(this.canvas, { opacity: 1, duration: this.mode === 'full' ? INTRO.lateFadeIn : 0.2, ease: 'none' });
-      if (this.mode === 'full') this.choreo.syncToLock(INTRO.lateFadeIn);
-      else this.choreo.setMode('reduced');
+      if (gl) gsap.to(this.canvas, { opacity: 1, duration: this.mode === 'full' ? INTRO.lateFadeIn : 0.2, ease: 'none' });
+      if (this.mode !== 'full') this.choreo.setMode('reduced');
+      else if (gl) this.choreo.syncToLock(INTRO.lateFadeIn);
     }
-    html().setAttribute('data-field', 'live');
+    if (gl) html().setAttribute('data-field', 'live');
     if (!this.forced && this.mode === 'full') {
       if (this.texTier === 'high') this.probe = new WarmupProbe();
-      this.governor = new AdaptiveGovernor();
+      this.governor = new AdaptiveGovernor(this.fired.length);
     }
     const cbs = [...this.readyCbs];
     this.readyCbs.clear();
@@ -591,7 +640,10 @@ class FieldEngine {
     if (!this.set.has(f.a)) this.requestLazy(f.a);
     if (!this.set.has(f.b)) this.requestLazy(f.b);
     if (f.lockEdge !== 0) this.choreo.onLockEdge(f.lockEdge);
-    if (this.dead || this.lost) return;
+    // §8.4: while the context is lost (for good after a second loss) the
+    // Canvas2D fallback paints the frame instead, under the same loop control.
+    const gl = !this.dead && !this.lost;
+    if (!gl && !this.fb) return;
 
     const active = this.isActive(f, time);
     if (this.dirtyReq) {
@@ -618,13 +670,18 @@ class FieldEngine {
       }
     }
 
-    this.writeUniforms(f);
-    if (this.mode === 'reduced' && f.seg < 0 && f.a !== f.b && store.film.override === null) this.renderCrossfade(f);
-    else this.renderer.render(this.scene, this.camera);
+    if (gl) {
+      this.writeUniforms(f);
+      if (this.mode === 'reduced' && f.seg < 0 && f.a !== f.b && store.film.override === null) this.renderCrossfade(f);
+      else this.renderer.render(this.scene, this.camera);
+    } else {
+      // Paints only when the picture changed (scroll, settling, crossfades).
+      this.fb!.paint(f, this.W, this.H, this.mode === 'reduced', force);
+    }
     this.shownSettled = f.settled;
     this.rendered++;
-    this.debug?.afterRender(f);
-    if (!force) this.measure(deltaMs);
+    if (gl) this.debug?.afterRender(f);
+    if (!force && gl) this.measure(deltaMs);
   }
 
   private isActive(f: Readonly<FieldFrame>, time: number): boolean {
@@ -757,6 +814,7 @@ class FieldEngine {
 
     u.uSafe.value = f.safe.rects;
     u.uSafeW.value = f.safe.weights;
+    u.uSafeF.value = f.safe.feathers;
     u.uSafeCount.value = f.safe.count;
     u.uGroupW.value = f.groupW;
     u.uFocusOn.value = f.focusOn;
@@ -842,12 +900,14 @@ class FieldEngine {
   private measure(deltaMs: number): void {
     if (deltaMs > 0 && deltaMs < 250) this.fps += (1000 / deltaMs - this.fps) * 0.05;
     if (this.mode !== 'full') return;
-    const verdict = this.probe?.push(deltaMs);
+    // QA (?debug, handle.debugSlowFrames): synthetic load on top of the real delta.
+    const ms = deltaMs > 0 ? deltaMs + this.slowMs : deltaMs;
+    const verdict = this.probe?.push(ms);
     if (verdict) {
       this.probe = null;
       if (verdict === 'slow' && this.tier === 'high') this.lowerTier('mid');
     }
-    const step = this.governor?.push(deltaMs);
+    const step = this.governor?.push(ms);
     if (step) this.applyStep(step);
   }
 
@@ -1026,39 +1086,127 @@ class FieldEngine {
     }
     this.watchDpr();
 
-    const lost = (e: Event) => {
-      e.preventDefault();
+    // §8.4: the first loss pauses WebGL and shows the Canvas2D fallback until
+    // the context is restored (textures rebuilt from the cached arrays, then
+    // a 400 ms crossfade back); a second loss stays on the fallback.
+    // The first loss asks the browser for a restore (preventDefault — three's
+    // own listener does the same). A second loss must not: the engine gives
+    // up on WebGL, so a restore would only rebuild three's GPU state on a
+    // context that never draws again. three registers its listener first, so
+    // a capture listener on the canvas (at the target, capture listeners run
+    // first) stops it from reaching three before it can preventDefault.
+    const lose = () => {
+      if (this.lost) return;
       this.lost = true;
       this.lossCount++;
+      if (this.lossCount >= 2) this.dead = true;
       this.choreo.release();
-      html().removeAttribute('data-field');
-      html().removeAttribute('data-field-states');
-      this.statesAttr = '';
       gsap.killTweensOf(this.canvas);
       this.canvas.style.opacity = '0';
-      // TODO(phase8-engine): show the Canvas2D fallback (fallback2d.ts) from the cached arrays.
-      if (this.lossCount >= 2) this.dead = true;
+      if (store.mode === 'full') store.mode = 'fallback';
+      html().setAttribute('data-field', 'fallback');
+      this.statesAttr = '';
+      this.onSetChanged();
+      this.showFallback();
+    };
+    const lost = (e: Event) => {
+      e.preventDefault();
+      lose();
+    };
+    const lostForGood = (e: Event) => {
+      if (this.lost || this.lossCount < 1) return; // the first loss: restorable
+      e.stopImmediatePropagation(); // neither three nor `lost` calls preventDefault
+      lose();
     };
     const restored = () => {
       if (this.dead || this.disposed) return;
       this.lost = false;
+      if (store.mode === 'fallback') store.mode = this.mode;
       // three's context restore rebuilds its background state with a black
       // clear colour (WebGLBackground defaults): put the void back.
       this.renderer.setClearColor(this.clearColor, 1);
+      // Rebuild every resident texture from its cached array now (§8.4, §9.9:
+      // never on the first frame that draws it).
       this.set.touch();
+      for (let id = 0; id <= StateId.FLATLINE; id++) this.upload(this.set, id as StateId);
       html().setAttribute('data-field', 'live');
+      this.statesAttr = '';
       this.onSetChanged();
       this.renderNow();
       gsap.to(this.canvas, { opacity: 1, duration: RESTORE_FADE_S, ease: 'none' });
+      this.fb?.hide();
       this.choreo.resume();
+      // The first frames after a restore recompile the programs: restart the
+      // governor's window (its fired steps stand).
+      if (this.governor) this.governor = new AdaptiveGovernor(this.fired.length);
       this.wake();
     };
+    this.canvas.addEventListener('webglcontextlost', lostForGood, true);
     this.canvas.addEventListener('webglcontextlost', lost, false);
     this.canvas.addEventListener('webglcontextrestored', restored, false);
     this.cleanups.push(() => {
+      this.canvas.removeEventListener('webglcontextlost', lostForGood, true);
       this.canvas.removeEventListener('webglcontextlost', lost, false);
       this.canvas.removeEventListener('webglcontextrestored', restored, false);
     });
+  }
+
+  /**
+   * Show the context-loss fallback (loaded on the first loss; its chunk never
+   * imports three). It paints from this loop (frameAt) and reads the resident
+   * set's cached arrays through a reused view (no per-frame allocation).
+   */
+  private showFallback(): void {
+    if (this.fb) {
+      this.fb.show();
+      this.wake();
+      return;
+    }
+    if (this.fbLoading) return;
+    this.fbLoading = true;
+    const view = { pos: new Float32Array(0), meta: new Uint8Array(0) };
+    import('./fallback2d.ts').then(
+      ({ LossFallback }) => {
+        this.fbLoading = false;
+        if (this.disposed) return;
+        try {
+          this.fb = new LossFallback(this.canvas, {
+            layout: () => this.layout,
+            arrays: (id) => {
+              const p = this.set.pos[id]?.image.data;
+              const m = this.set.meta[id]?.image.data;
+              if (!p || !m) return null;
+              view.pos = p as Float32Array;
+              view.meta = m as Uint8Array;
+              return view;
+            },
+            scale: (id, H) => this.stateScale(id, this.set.genH > 0 && H > 0 ? this.set.genH / H : 1),
+            pivots: () => this.set.extras[StateId.CHART]?.uBarPivot ?? null,
+          });
+        } catch (err) {
+          this.fallbackFailed(err);
+          return;
+        }
+        if (this.lost || this.dead) {
+          this.fb.show();
+          this.wake();
+        }
+      },
+      (err: unknown) => {
+        this.fbLoading = false;
+        this.fallbackFailed(err);
+      },
+    );
+  }
+
+  /** No Canvas2D either: the CSS glow is the backdrop until a restore (§8.4 last resort). */
+  private fallbackFailed(err: unknown): void {
+    console.error('[field] Canvas2D fallback unavailable', err);
+    if ((this.lost || this.dead) && html().getAttribute('data-field') === 'fallback') {
+      html().removeAttribute('data-field');
+      html().removeAttribute('data-field-states');
+      this.statesAttr = '';
+    }
   }
 
   /**
@@ -1102,10 +1250,15 @@ class FieldEngine {
     if (mode === this.mode || this.disposed) return;
     this.mode = mode;
     this.uniforms.uMotion.value = mode === 'full' ? 1 : 0;
+    // The fallback covering a lost context: 'fallback' in full motion, the director's posters under reduced.
+    if (this.lost || this.dead) store.mode = mode === 'reduced' ? 'reduced' : 'fallback';
     if (mode === 'reduced') {
       this.frozenTime = gsap.ticker.time;
       this.probe = null;
       this.governor = null;
+    } else if (this.ready && !this.forced && !this.governor) {
+      // Back to full motion: the governor resumes after the steps already fired (never back up).
+      this.governor = new AdaptiveGovernor(this.fired.length);
     }
     if (this.ready) this.choreo.setMode(mode);
     this.invalidate();
@@ -1131,6 +1284,8 @@ class FieldEngine {
       resident: Array.from({ length: StateId.FLATLINE + 1 }, (_, i) => i).filter((i) => this.set.has(i as StateId)),
       adaptive: [...this.fired],
       lost: this.lost || this.dead,
+      renderer: this.lost || this.dead ? 'canvas2d' : 'webgl',
+      ...(this.fb ? { paint: this.fb.stats() } : {}),
       intro: this.choreo.introRunning,
       name: this.name
         ? {
@@ -1165,6 +1320,8 @@ class FieldEngine {
     this.meshes.material.dispose();
     this.meshes.glowMaterial.dispose();
     this.renderer.dispose();
+    this.fb?.dispose();
+    this.fb = null;
     this.debug?.dispose();
     this.debug = null;
     html().removeAttribute('data-field');

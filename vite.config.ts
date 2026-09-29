@@ -42,4 +42,9 @@ function preloadFonts(): Plugin {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss(), preloadFonts(), prerender()],
+  build: {
+    // The lazy field chunk (three + engine + shaders) is ~610 kB raw by design; its
+    // budget is 170 kB gzipped (SPEC §8.5), checked by the QA audit, not by this warning.
+    chunkSizeWarningLimit: 650,
+  },
 })

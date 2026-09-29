@@ -87,7 +87,7 @@ export default function ProjectPanel({ project, active = false }: ProjectPanelPr
       data-panel={project.index}
       data-active={active || undefined}
       style={cardVars}
-      className="relative pb-24 desktop:flex desktop:min-h-svh desktop:items-center-safe desktop:py-[max(128px,16svh)] staged:absolute staged:inset-0 staged:pointer-events-none staged:opacity-0 staged:data-active:pointer-events-auto staged:data-active:opacity-100"
+      className="relative pb-24 desktop:flex desktop:min-h-svh desktop:items-center-safe desktop:py-[max(128px,16svh)] staged:absolute staged:inset-0 staged:pointer-events-none staged:opacity-0 staged:transition-opacity staged:duration-300 staged:ease-ui staged:data-active:pointer-events-auto staged:data-active:opacity-100"
     >
       {/* Mobile: the emblem's slot opens the block (§4.2). Hidden on desktop. */}
       <div className="field-slot" data-slot="project" aria-hidden="true">

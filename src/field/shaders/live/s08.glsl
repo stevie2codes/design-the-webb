@@ -9,7 +9,7 @@
 // weighted by uFocusOn so neutral w = 1 with focus off never moves) is pulled
 // like a drawer: +.06s along its local y (up off the stack) and +.08s along
 // its local x. Inactive plates (w → 0) turn p-steel. field.vert.glsl adds the
-// rest for K_STACK: α ×mix(.35, 1, w), +1.2 CoC for (1 − w), and the 70%
+// rest for K_STACK: α ×mix(.35, 1, w), +.6 CoC for (1 − w), and the 70%
 // ember mix of the focused plate. Sparks (the filled tile, the chart markers,
 // the cursor tip) smoulder and travel with their plate.
 //
@@ -25,6 +25,10 @@
 // .3 the three resting plates all but vanished (α ×.35 × .7, +1.2 CoC).
 #define STACK_ACTIVE_GAIN 0.8
 #define STACK_REST_DIM 0.1
+// Final review: the resting plates' OUTLINES stay legible (four isometric
+// layers, one drawer out): edges ×(1 + 1.3) against the shader's α ×.35, so
+// a resting outline sits near .8 of its lit alpha while its fill stays dim.
+#define STACK_REST_EDGE 1.3
 // The plate's local x and y after 45° about Y and 35.264° about X, depth ×Z_FLAT.
 #define STACK_EX vec3(0.7071068, 0.4082483, -0.5773503 * STACK_ZFLAT)
 #define STACK_EY vec3(0.0, 0.8164966, 0.5773503 * STACK_ZFLAT)
@@ -42,7 +46,8 @@ void liveStack(inout Live L, vec4 meta, vec4 off, float t) {
   // darker than bone), and the unfocused plates recede a little further
   // than the shader's α ×.35 (their +1.2 CoC spreads the same light wider).
   L.bright *= 1.0 + STACK_ACTIVE_GAIN * pull;
-  L.alpha *= 1.0 - STACK_REST_DIM * rest;
+  if (roleOf(meta) == R_EDGE) L.alpha *= 1.0 + STACK_REST_EDGE * rest;
+  else L.alpha *= 1.0 - STACK_REST_DIM * rest;
   if (roleOf(meta) == R_SPARK) {
     // Dense ember clusters would still glare at α ×.35: an unfocused plate's
     // sparks fade further, so only the pulled drawer burns.

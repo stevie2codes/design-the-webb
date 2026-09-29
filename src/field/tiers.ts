@@ -237,7 +237,16 @@ export class AdaptiveGovernor {
   private head = 0;
   private sum = 0;
   private slowFor = 0;
-  private next = 0;
+  private next: number;
+
+  /**
+   * `fired`: steps already applied this session (a governor re-created after
+   * a motion toggle or a context restore resumes after them — it never
+   * repeats a step and never steps back up).
+   */
+  constructor(fired = 0) {
+    this.next = Math.min(ADAPTIVE.steps.length, Math.max(0, Math.floor(fired)));
+  }
 
   /** Every step has fired. */
   get exhausted(): boolean {

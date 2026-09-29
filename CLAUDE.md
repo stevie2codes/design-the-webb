@@ -17,7 +17,7 @@ The shared scroll ↔ field APIs (store, segments, director, anchors, field entr
   - Instrument Serif italic
   - JetBrains Mono Variable
 
-  There are **no Google Fonts** `<link>`s. The Archivo latin woff2 is preloaded by the `preloadFonts()` plugin in `vite.config.ts`.
+  There are **no Google Fonts** `<link>`s. The Archivo latin woff2 is preloaded by the `preloadFonts()` plugin in `vite.config.ts`. `index.css` declares metric-matched local fallback faces (`Archivo Fallback`, `Instrument Serif Fallback`, `JetBrains Mono Fallback`: `size-adjust` / `ascent-override` over Arial, Times and Courier) second in each stack, so the font swap does not shift layout (CLS 0). Re-measure them if a font or type role changes.
 - **Icons**: `lucide-react` at `strokeWidth={1.5}`. Only Lock, ArrowUpRight, ArrowUp, Copy, Menu and X are used.
 - **Removed, do not reintroduce**: Framer Motion, `components/hero-bg/`, the cream/orange palette, custom cursors that hide the native cursor, and magnetic buttons.
 
@@ -30,12 +30,14 @@ The shared scroll ↔ field APIs (store, segments, director, anchors, field entr
 - `npx tsc -p tsconfig.app.json --noEmit`: typecheck only.
 - `npm run gen:layout`: rewrites the static layout CSS variables in `src/index.css` from `src/field/layout.ts`. **Run it after every edit to layout.ts.** `node scripts/gen-layout-css.mjs --check` checks for drift without writing. It needs Node 22.18 or later for native TypeScript stripping.
 - `npm run gen:grain`: regenerates `public/textures/grain-128.png`.
+- `npm run gen:og`: rebuilds `public/og-image.png` from a real build (`scripts/make-og.mjs`, serves on port 4303).
 
 ## Module layout (§9.1)
 
 ```
 index.html                pre-paint script: no-js→js, html.rm, html[data-layout], html[data-intro="pending"];
-                          scrollRestoration manual
+                          scrollRestoration manual; a deep-link #hash is stripped before paint and kept in
+                          window.__dtwHash (no intro), ScrollToHash jumps there after the first refresh
 src/
   main.tsx                fontsource + lenis.css + index.css; applyLayoutVars(); init motion/layout sync;
                           hydrateRoot when #root[data-ssr] matches routeKey(pathname), else createRoot
@@ -66,6 +68,7 @@ src/
                           reveals, onProgress / reveal(ctx) callbacks (ctx.gsap, ctx.ScrollTrigger, ctx.lineMask,
                           ctx.fadeUp), focus-in glide to the hold; one gsap.context per chapter
     jump.ts               §4.4 jump policy (glide ≤ 2 states, else jump cut), focusQuietly, onJumpLinkClick
+    initialHash.ts        the first load's deep-link hash (window.__dtwHash, index.html)
   field/
     layout.ts             SINGLE SOURCE OF TRUTH for anchor boxes (vw/svh), desktop + mobile; CHART geometry,
                           card box, slot heights, MQ; resolveAnchor(); layoutCss(); applyLayoutVars()
@@ -81,13 +84,15 @@ src/
     states/               ids.ts, common.ts (golden layout, perm, sort keys, samplers, pack), registry.ts,
                           s00-static.ts … sNN-*.ts (pure generators), name-sampler.ts (S1, main thread)
     worker/               generate.worker.ts, run.ts (no-Worker fallback runner), protocol.ts
-    debug.ts              ?debug=field overlay (lazy chunk); fallback2d.ts (phase 8)
+    debug.ts              ?debug=field overlay (lazy chunk)
+    fallback2d.ts         Canvas2D fallback (lazy chunk, never imports three): standalone driver (no WebGL2 /
+                          feeble device / engine failure) and the engine's context-loss overlay (LossFallback)
   chapters/               Hero, About, CareerChart, Nda, Projects, ProjectPanel, Capabilities, Contact
   components/             Chapter, ChapterHeading, LinkLabel, Chip, SkipLink, Atmosphere, Nav, MobileMenu,
                           Rail, Hud, Footer, CopyEmail, MotionToggle, CursorRing, JumpCutOverlay, EmblemOutline
   pages/                  HomePage (composes chapters), ProjectDetailPage, NotFoundPage
-scripts/                  gen-layout-css.mjs, make-grain.mjs, prerender-plugin.mjs (+ .d.mts; build prerender and
-                          the `vite preview` 404 fallback)
+scripts/                  gen-layout-css.mjs, make-grain.mjs, make-og.mjs, prerender-plugin.mjs (+ .d.mts; build
+                          prerender with per-route og:title / og:url / canonical, and the `vite preview` 404 fallback)
 ```
 
 ## The field architecture, in short
@@ -104,7 +109,7 @@ scripts/                  gen-layout-css.mjs, make-grain.mjs, prerender-plugin.m
   - Full desktop: Lenis, sticky stages, WebGL High or Mid tier.
   - Full mobile: native scroll, only C0 and C5 sticky, WebGL Low tier, field slots.
   - Reduced motion: no Lenis, flow layout, still posters.
-  - No WebGL: Canvas2D fallback.
+  - No WebGL (no WebGL2 context, a feeble device, the engine chunk failing, or a second context loss): Canvas2D fallback. A first context loss shows it until the context is restored.
   - Forced colors (Windows High Contrast): no field at all; the `<h1>` is never masked and the scrims, atmosphere and scroll cue are hidden.
   - No JS: CSS glow backdrop.
 
@@ -122,7 +127,7 @@ scripts/                  gen-layout-css.mjs, make-grain.mjs, prerender-plugin.m
   - Ember text is never smaller than 12px.
   - Ink on ember is forbidden.
 - **Focus.** Every hover effect also fires on `:focus-visible`, and touch targets are at least 44px.
-- **Performance.** Initial JS is ≤ 140 KB gzipped (≈ 110 KB today). three goes in its own chunk, and so does the motion layer. Images always carry `width` and `height`.
+- **Performance.** Initial JS is ≤ 140 KB gzipped (≈ 122 KB today; engine ≤ 170, worker ≤ 20). three goes in its own chunk, and so does the motion layer. Images always carry `width` and `height`.
 - **Motion.** Use GSAP only through `src/motion/gsap.ts`, and only from lazy code: in initial-bundle code (components, chapters, scroll/) get it with `loadGsap()` / `loadScroll()`, or from a chapter's `reveal(ctx)` context (`ctx.gsap`, `ctx.ScrollTrigger`, `ctx.lineMask`, `ctx.fadeUp`). Chapter triggers live in useChapter's per-chapter `gsap.context` (rebuilt on reduced-motion / layout changes). Import motion constants from `motion/tokens.ts`. Every scrubbed tween uses `ease: 'none'` with `scrub: true`.
 
 ## Design system (`src/index.css`)
@@ -171,7 +176,7 @@ scripts/                  gen-layout-css.mjs, make-grain.mjs, prerender-plugin.m
   - `live:` means JS with full motion.
   - `rm:` means reduced motion.
   - `field-live:` and `no-field:` follow whether the WebGL field is drawing.
-  - `field-s2:` … `field-s9:` and `no-field-s10:` follow whether the field draws **that state** (`html[data-field-states]`). Use them to hide a state's DOM stand-in (chart SVG bars, emblem outlines…), never `field-live:`, so a state whose generator has not landed never leaves a hole.
+  - `field-s2:` … `field-s9:` and `no-field-s10:` follow whether the field (WebGL or the Canvas2D fallback) draws **that state** (`html[data-field-states]`; the fallback never lists S2, so the chart's SVG bars stay). Use them to hide a state's DOM stand-in (chart SVG bars, emblem outlines…), never `field-live:`, so a state whose generator has not landed never leaves a hole.
   - `intro:` applies while the §6 intro is expected or runs (`html[data-intro="pending"]` from the pre-paint script until the engine decides, then `"running"`).
   - **`staged:`** applies only inside a chapter whose stage is actually sticky right now. Use it for stacked or absolute stage layouts that must fall back to flow under no-js and rm.
 
