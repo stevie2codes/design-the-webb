@@ -532,6 +532,15 @@
     line-height: 1.1;
     letter-spacing: -0.02em;
   }
+  /* The hero's S/N meter value (aria-hidden): mono, light, tabular. */
+  .t-readout {
+    font-family: var(--font-mono);
+    font-weight: 300;
+    font-variant-numeric: tabular-nums;
+    font-size: clamp(1.75rem, 1rem + 1.4vw, 2.5rem);
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
   .t-stat {
     font-family: var(--font-sans);
     font-weight: 300;
@@ -589,10 +598,17 @@
   }
 
   /* The hero <h1> print (§9.5): JS writes --scan (0–100%) while the beam
-     sweeps. Without JS --scan is unset, so the name stays fully visible. */
+     sweeps. Without JS --scan is unset, so the name stays fully visible.
+     The masked part keeps a ghost at --ghost opacity (0–1, the hero writes
+     it from its progress: faint at rest, gone as the particles resolve), so
+     the name's place is never an empty hole while the field is noise. */
   .scan-print {
-    -webkit-mask-image: linear-gradient(90deg, #000 var(--scan, 100%), transparent calc(var(--scan, 100%) + 2%));
-    mask-image: linear-gradient(90deg, #000 var(--scan, 100%), transparent calc(var(--scan, 100%) + 2%));
+    -webkit-mask-image: linear-gradient(
+      90deg,
+      #000 var(--scan, 100%),
+      rgb(0 0 0 / var(--ghost, 0)) calc(var(--scan, 100%) + 2%)
+    );
+    mask-image: linear-gradient(90deg, #000 var(--scan, 100%), rgb(0 0 0 / var(--ghost, 0)) calc(var(--scan, 100%) + 2%));
   }
 
   /* §6 intro failsafe: html[data-intro="pending"] (the pre-paint guess)
@@ -787,6 +803,48 @@
   html:not([data-field]) .scrim::before {
     opacity: 0;
   }
+  /* One soft stage scrim instead of a box per block (the hero): a chapter
+     with .soft-scrim drops its blocks' ::before scrims and draws a single
+     .stage-scrim (aria-hidden, first in the stage) — wide radial falloffs
+     with no edge to read as a panel. The shader's text-safe mask still caps
+     the particles behind every [data-safe] block. */
+  .soft-scrim [data-safe]::before {
+    display: none;
+  }
+  .stage-scrim {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(
+        ellipse 64vw 36svh at 22vw 75svh,
+        rgb(5 5 7 / 0.8),
+        rgb(5 5 7 / 0.7) 32%,
+        rgb(5 5 7 / 0.42) 60%,
+        rgb(5 5 7 / 0.12) 84%,
+        transparent
+      ),
+      radial-gradient(
+        ellipse 36vw 11svh at 16vw 40svh,
+        rgb(5 5 7 / 0.62),
+        rgb(5 5 7 / 0.3) 55%,
+        transparent
+      );
+    transition: opacity 300ms var(--ease-ui);
+    @variant mobile {
+      background: radial-gradient(
+        ellipse 95vw 34svh at 40vw 60svh,
+        rgb(5 5 7 / 0.8),
+        rgb(5 5 7 / 0.66) 36%,
+        rgb(5 5 7 / 0.36) 66%,
+        transparent
+      );
+    }
+  }
+  html:not([data-field]) .stage-scrim {
+    opacity: 0;
+  }
   /* Scrubbed scrims follow the scroll directly (no 300ms lag behind their text). */
   [data-p-exit][data-safe]::before {
     transition: none;
@@ -978,6 +1036,7 @@
     .atmo,
     [data-safe]::before,
     .scrim::before,
+    .stage-scrim,
     [data-scroll-cue] {
       display: none;
     }

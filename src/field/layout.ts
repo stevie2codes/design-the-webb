@@ -176,6 +176,22 @@ export const NAME_METRICS = {
 } as const;
 
 /**
+ * The name as a career timeline (hero idea #9), shared by the S1 sampler
+ * (particle colour, focus group, hairline ticks) and the hero's DOM axis.
+ * Read left → right it spans `years`; the first `devYears` are the developer
+ * years (steel, focus group `groups.dev`), the rest product design (signal,
+ * `groups.design`). The values are the `stats` counts in content/site.ts.
+ * The hairline sits `hairlineEm` below the baseline.
+ */
+export const NAME_TIMELINE = {
+  years: 6,
+  devYears: 2,
+  /** Focus groups: the two spans, and `rest` (the band and the hairline) that no hover dims. */
+  groups: { dev: 0, design: 1, rest: 7 },
+  hairlineEm: 0.14,
+} as const;
+
+/**
  * `.t-name` font-size (§2.5). Desktop: min(13.2vw, 30svh), one line.
  * Mobile: two lines sized so STEPHEN fits between the gutters. The spec
  * writes `(100vw − 40px) / 3.92`, which is the same value at phone widths

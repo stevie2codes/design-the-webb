@@ -55,6 +55,15 @@
 // focus with a soft edge — a (1 − d/r)² pull left only ~5–11 px sharp,
 // under the 24 px cursor ring.
 #define LOUPE_CORE 0.35
+// The loupe is wider than push / attract, so the lens reads at a glance.
+#define LOUPE_R 0.32
+// Loupe peek (hero rest, S0 → S1): S1 grains whose target lies under the
+// lens are pulled onto it, so the name shows through the loupe before the
+// first scroll. Only grains from within PEEK_REACH su travel (no streaks
+// across the frame) and those far out fade: the lens shows a partial,
+// sharp fragment of the name — a hint, not the reveal.
+#define PEEK_REACH vec2(1.2, 2.2)
+#define PEEK_PULL 1.0
 
 // Text-safe mask (§2.3; tuned, CONTRACTS.md): ×.22 inside each block's rect,
 // with a per-rect outward feather (uSafeF: 112px, so the
@@ -285,16 +294,27 @@ void main() {
   // the cursor at any depth.
   float bright = mix(la.bright, lb.bright, e);
   float loupe = 0.0; // 1 = racked into focus by the loupe
+  if (uMouseAmt > 0.001 && uMouseMode == M_LOUPE && uKindB == K_NAME && !dust && roleOf(mB) != R_HALO) {
+    // Peek: measured on the target's own screen position (pb sits near z 0).
+    vec2 tb = pb.xy * (CAM_Z / (CAM_Z - pb.z)) - uMouse.xy;
+    float peek = uMouseAmt * (1.0 - smoothstep(LOUPE_CORE * LOUPE_R, LOUPE_R, length(tb)));
+    peek *= 1.0 - smoothstep(PEEK_REACH.x, PEEK_REACH.y, length(pa.xy - pb.xy));
+    if (peek > 1e-4) {
+      p = mix(p, pb, PEEK_PULL * peek);
+      bright *= 1.0 + 0.8 * peek;
+    }
+  }
   if (uMouseAmt > 0.001) {
     float persp0 = CAM_Z / (CAM_Z - p.z);
     vec2 sp = p.xy * persp0;
     vec2 d = sp - uMouse.xy;
     float dist = length(d);
-    if (dist < MOUSE_R) {
+    float mr = uMouseMode == M_LOUPE ? LOUPE_R : MOUSE_R;
+    if (dist < mr) {
       if (uMouseMode == M_LOUPE) {
         // A lens of sharpness: pull onto the focal plane, keeping the screen
         // position, and (below) drive the circle of confusion to 1.
-        loupe = uMouseAmt * (1.0 - smoothstep(LOUPE_CORE * MOUSE_R, MOUSE_R, dist));
+        loupe = uMouseAmt * (1.0 - smoothstep(LOUPE_CORE * LOUPE_R, LOUPE_R, dist));
         float nz = mix(p.z, uFocusZ, 0.95 * loupe);
         p = vec3(sp * (CAM_Z - nz) / CAM_Z, nz);
         bright *= 1.0 + 0.3 * loupe;
@@ -362,6 +382,9 @@ void main() {
   // Colour ramp; S8's focused plate mixes 70% toward ember.
   float rampPos = clamp(mix(mA.r, mB.r, e) + mix(la.ramp, lb.ramp, e), 0.0, 1.0);
   rampPos = mix(rampPos, 0.75, 0.7 * smoothstep(0.7, 1.0, w) * uFocusOn * mix(stackA, stackB, e));
+  // The hovered span of the name's timeline (hero, S1 focus groups) glows.
+  float nameK = mix(uKindA == K_NAME ? 1.0 : 0.0, uKindB == K_NAME ? 1.0 : 0.0, e);
+  bright *= 1.0 + 0.8 * smoothstep(0.7, 1.0, w) * uFocusOn * nameK;
 
   // Text-safe mask (§2.3, §3.6) on the final screen position: particles
   // inside a [data-safe] block (rounded, smootherstep feather) get α ×.22, no ember,

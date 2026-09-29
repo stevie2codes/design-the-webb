@@ -515,7 +515,8 @@ The rects are computed **analytically** each frame from stage-local rects and sc
 - **Mouse** (`pointer: fine` only, full motion only):
   - The pointer is projected onto z = 0: `X = ndc.x·A`, `Y = ndc.y`.
   - It is damped at a rate of 0.14 per frame, corrected for dt. Radius r = 0.24 su.
-  - **S0 and S10 — loupe:** particles within r are pulled `z → mix(z, 0, .85·(1 − d/r)²)`, so they turn sharp and bright.
+  - **S0 and S10 — loupe:** particles within r are pulled `z → mix(z, 0, .85·(1 − d/r)²)`, so they turn sharp and bright. The loupe's r is 0.32 su (wider than push / attract, so the lens reads at a glance).
+  - **Loupe peek (hero rest, S0 → S1):** S1 grains whose *target* lies under the lens are pulled onto it and brightened, so a sharp fragment of the name shows through the loupe before the first scroll. Only grains whose source is within 1.2–2.2 su (soft) travel, so nothing streaks across the frame.
   - **S1–S8 — push:** up to 0.05 su outward with a `(1 − d/r)²` falloff, and +30% α.
   - **S9 — attract:** −0.08 su, so the beacon leans toward the cursor.
   - `uMouseAmt` eases to 0 over 400 ms on `pointerleave` or blur.
@@ -598,8 +599,9 @@ Shares below are fractions of **M (shape)**. Sparks are listed separately; they 
 - **Recipe:**
   - **82% glyph pixels**, with edge pixels (any 4-neighbour at alpha ≤ 128) given 2× selection weight, which gives about 38% edge and 62% interior. z jitter ±.015, xy jitter ±0.4 canvas px.
   - **18% atmospheric band:** name centre ± 1.1 cap-heights, 115% of the name width, z ∈ [−.6, .2], `p-steel` at α .10.
-- **Sparks:** an ember hairline 0.14em below the baseline, across the full name width.
-- **Colour:** glyphs `p-signal`, edges α 1.0, interior α .6.
+- **Sparks:** an ember hairline 0.14em below the baseline, across the full name width. On the one-line name, 16% of the sparks hang yearly ticks from it (0 … 6; .05em deep, the year-2 boundary .09em).
+- **The name is a career timeline** (`NAME_TIMELINE` in `field/layout.ts`). Read left → right (line by line on mobile) it spans 6 years. Glyph grains in the first 2 (the developer years) are `p-steel` in focus group 0; the rest are `p-signal` in group 1. The band and the hairline are group 7, which no hover dims.
+- **Colour:** glyphs `p-steel` / `p-signal` by year (above), edges α 1.0, interior α .6.
 - **Live:**
   - α shimmer .8–1.0 at .3–.9 Hz.
   - **Scan beam:** particles within 0.02 su of `uScanX` get +180% brightness.
@@ -915,6 +917,9 @@ Conventions:
 | Lede | `.t-display-m` ink | Gutter, top 70vh, one line |
 | CTAs | Primary + text link | Gutter, 81vh |
 | Scroll cue (aria-hidden) | `.t-micro` ink-2 | Bottom centre, 92vh, over a 48px, 1px line with a travelling dot |
+| S/N meter (aria-hidden) | `.t-label` + `.t-readout` | Right gutter; its 1px track (ember fill = the signal) sits on the eyebrow's baseline. Desktop, JS, full motion only; it takes over the corner HUD in the hero. |
+| Timeline axis (aria-hidden) | `.t-micro` ink-2 | Under the hairline, in the `<h1>`'s own coordinates: **0**, **Developer** (steel swatch) centred on years 0–2, **2**, **Product design** (bone swatch) centred on 2–6, **6 Years**. Desktop, JS. Fades in over p .50–.62. |
+| Stage scrim | `.stage-scrim` | One soft radial scrim behind the lede and CTAs (and a smaller one at the eyebrow), replacing the per-block `[data-safe]` boxes (`.soft-scrim` chapter). |
 
 **Layout (mobile).** Eyebrow at 14svh. Name on two lines at 20–38svh. Lede on two lines at 44svh. CTAs stacked full width at 58svh, each 48px tall. No scroll cue.
 
@@ -932,11 +937,11 @@ Conventions:
 
 | p | What happens |
 |---|---|
-| 0–.06 | Rest. S0 with the loupe active; the HUD reads S/N 0.03. |
+| 0–.06 | Rest. S0 with the loupe (and its peek) active; the S/N meter reads 0.03. The masked `<h1>` shows as a **ghost** at 11% (`--ghost`), so the name's place is never an empty hole; the ghost fades out over p .30–.58 as the particles resolve. |
 | .02–.08 | The scroll cue fades out. |
 | .06–.62 | **seg0**, the rack focus: S0 → S1 with the aperture going .9 → .04. The HUD climbs to 1.00. Eyebrow, lede and CTAs stay perfectly still; the lede captions the effect. |
 | .62 | **Lock**, time-based with hysteresis (§9.5, §10). Fires forward when p ≥ .62 **and** F ≥ .97; reverses when p < .56 or F < .90. The scan beam sweeps left → right in 900 ms (`cine`), and `--scan` prints the DOM h1. Then `uPrinted` goes 0 → 1 over 500 ms: particles become a .45-α halo. |
-| .62–1 | Hold, 38% of L. |
+| .62–1 | Hold, 38% of L. **Hover the name** (fine pointer, full motion): it unprints (the particles take over), the hovered span of the timeline lights (S1 groups 0 / 1, `focusOn` glow) and a readout above the pointer names it from `stats` (**2** Years as a Developer, **4+** Years in Product Design). Leaving re-prints it with the beam. The same readout works while the name is formed but not yet locked (F .90–1.04). |
 | Exit transit | seg1 (the Pour) starts at `top` + 96. Its first 120 ms is time-based: `--scan` fades to 0 and `uPrinted` goes to 0, so the DOM type "hands its glyphs back" and the particle name ignites. |
 
 ### C1 About — sticky, L = 120vh — `#about`
@@ -1153,9 +1158,9 @@ Conventions:
 
 **HUD (desktop, aria-hidden).**
 
-- Bottom-left, `.t-micro` ink-2 with tabular digits: **S/N 0.03**.
+- Bottom-left, `.t-micro` ink-2 with tabular digits: **S/N 0.03**. In the hero (desktop, full motion) the S/N meter beside the eyebrow carries the same value instead (§5 C0): a stage with a displayed `[data-hud-local]` is not a HUD zone.
 - `sn = 1 − clamp(.75·(aperture − .04)/.86 + .25·turb/.4, 0, 1)`, damped over 200 ms and written through a ref at 10 Hz.
-- It is the only readout. There is no boot log, no coordinates, no frame timer and no bezel.
+- It is the only readout (the hero's meter is the same readout, moved). There is no boot log, no coordinates, no frame timer and no bezel.
 
 **Cursor.**
 
