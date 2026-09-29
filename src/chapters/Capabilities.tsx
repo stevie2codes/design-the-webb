@@ -1,11 +1,28 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Chapter from '../components/Chapter';
 import ChapterHeading from '../components/ChapterHeading';
 import { capabilities, type Capability } from '../content/site';
-import { useLayoutMode } from '../motion/useLayoutMode';
 import { STACK_FIT } from '../field/layout';
+import { StateId } from '../field/states/ids';
+import { subscribeScroll } from '../motion/lenis';
 import { headingId } from '../scroll/chapters';
+import { store } from '../scroll/store';
+import type { ChapterContext } from '../scroll/useChapter';
+import { posterF, watchFilm } from './choreo/film';
+import { claimFocus, releaseFocus } from './choreo/fx';
 
+/** The four plates (S8 focus groups g0–g3, top first). */
+const ROWS = capabilities.items.length;
+const PLATE_GROUPS = [0, 1, 2, 3] as const;
+/**
+ * The plate focus is claimed only while the field shows the stack: from the
+ * tail of seg7 (S7's spokes share g0–g3 and must not dim) to the very start
+ * of the spiral — released at F 8.04 (tuned; was 8.6) so every plate carries
+ * its full light into the spiral instead of three dimmed plates. Displayed
+ * film position.
+ */
+const FOCUS_GATE = [7.9, 8.04] as const;
+const FOCUS_OWNER = 'capabilities';
 
 /**
  * Stuck-stage measures (the `staged:` variant: desktop, full motion, and only
@@ -17,8 +34,22 @@ import { headingId } from '../scroll/chapters';
  * without JS and on short landscape phones — the plain roles and rhythm
  * apply (.t-display-l / .t-display-m, py-6).
  */
-const STATEMENT_FS = 'staged:text-[max(2rem,min(clamp(2.25rem,1.3rem+3.4vw,5rem),5.4svh))]';
+const STATEMENT_FS =
+  'staged:text-[max(2rem,min(clamp(2.25rem,1.3rem+3.4vw,5rem),5.4svh))] staged:low:text-[max(2rem,min(clamp(2.25rem,1.3rem+3.4vw,5rem),4.6svh))]';
 const TITLE_FS = 'staged:text-[max(1.625rem,min(clamp(1.625rem,1.1rem+1.8vw,2.75rem),3.9svh))]';
+/**
+ * The short-laptop tier (`low:`, height ≤ 760px: 1366×657, 1536×730,
+ * 1280×720 … down to 640px tall): a two-line statement (4.6svh cap), tighter
+ * row rhythm (py .75svh, description lead-in .6svh, line-height 1.5) and a
+ * 2svh list gap, so the stuck stage fits instead of falling back to flow.
+ * The top padding stays: the heading must clear the nav's 96px scrim.
+ */
+const LOW = {
+  list: 'staged:low:mt-[2svh]',
+  row: 'staged:low:py-[0.75svh]',
+  desc: 'staged:low:mt-[0.6svh] staged:low:leading-[1.5]',
+} as const;
+
 /**
  * The left column: gutter → 49vw (§5 C4). The width keeps every description
  * on two lines down to 1280px wide (at a 44ch caption measure each takes
@@ -36,42 +67,129 @@ const COLUMN = 'desktop:w-[calc(49vw-var(--gutter))]';
  * right (centre 70vw, 54svh). Every description is always visible; the
  * active row is emphasis only (colour + a 2px ember rule), no text moves.
  *
- * Hooks for later phases:
- * - `li[data-group=k]` + `[data-active]`: the active capability (plate k,
- *   uGroupW). Hover / click set it here with local state; the scroll phase
- *   steps it by sticky progress p ∈ [k/4, (k+1)/4) on desktop.
+ * Hooks:
+ * - `li[data-group=k]` + `[data-active]`: the active capability (plate k).
  * - `[data-field-anchor="S8"]`: the desktop box sits in the stage, the mobile
  *   box in the `.field-slot`; each is display:none in the other layout.
  * - `[data-safe]` on the text column (scrim + text-safe mask).
+ *
+ * Choreography (§5 C4). seg7 (S7 → S8) runs from `capabilities` − 80vh to
+ * + 10vh. The statement line-masks in while the section top moves from 60%
+ * to 15% of the viewport; the rows fade up (16px) from 40% to 5%.
+ * - Stuck: row k is active for p ∈ [k/4, (k+1)/4). The step is time-based
+ *   (500 ms CSS transitions): the title turns ink, the index ember, the 2px
+ *   ember rule grows (scaleY) — and plate k takes the field's focus
+ *   (uGroupW k = 1, the others 0, uFocusOn 1; the director damps them over
+ *   500 ms): the drawer slides out and racks into focus, the other plates
+ *   turn steel and defocus. No DOM text moves (hold rule).
+ * - Hover or click on a row makes it active until the scroll window next
+ *   changes.
+ * - Flow (mobile, the fit-guard fallback, reduced motion): the row nearest
+ *   the viewport centre is active.
+ * The plate focus is claimed only while the field shows the stack (see
+ * FOCUS_GATE; the S8 poster under reduced motion) and released otherwise.
  */
 export default function Capabilities() {
   const titleId = headingId('capabilities');
-  const layout = useLayoutMode();
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLOListElement>(null);
+  /** The row the scroll window picks (sticky progress, or the centre row in flow). */
+  const scrollK = useRef(0);
+  /** A hovered / clicked row; cleared when the scroll window changes. */
+  const pinned = useRef<number | null>(null);
+  const activeK = useRef(0);
+  /** Re-evaluates the plate focus; set by the chapter's reveal callback. */
+  const syncFocus = useRef<() => void>(() => {});
 
-  // Mobile (§5 C4): the row nearest the viewport centre is active. A
-  // zero-height root at 50% of the viewport picks the row crossing it.
+  const apply = useCallback(() => {
+    const k = pinned.current ?? scrollK.current;
+    if (k !== activeK.current) {
+      activeK.current = k;
+      setActive(k); // a discrete step (≤ 4 per pass), never per frame
+    }
+    syncFocus.current();
+  }, []);
+
+  const fromScroll = useCallback(
+    (k: number) => {
+      if (k === scrollK.current) return;
+      scrollK.current = k;
+      pinned.current = null;
+      apply();
+    },
+    [apply],
+  );
+
+  const onActivate = useCallback(
+    (k: number) => {
+      pinned.current = k;
+      apply();
+    },
+    [apply],
+  );
+
+  // Stuck (§5 C4): row k for p ∈ [k/4, (k+1)/4). Flow chapters get their
+  // progress over 'top bottom' → 'bottom top', which means nothing here.
+  const onProgress = (p: number) => {
+    if (!store.chapters.capabilities?.sticky) return;
+    fromScroll(Math.min(ROWS - 1, Math.max(0, Math.floor(p * ROWS))));
+  };
+
+  // Flow (mobile, fit-guard fallback, reduced motion): the row nearest the
+  // viewport centre is active. A zero-height root at 50% of the viewport
+  // picks the row crossing it.
   useEffect(() => {
     const list = listRef.current;
-    if (layout !== 'mobile' || !list || typeof IntersectionObserver === 'undefined') return;
+    if (!list || typeof IntersectionObserver === 'undefined') return;
     const rows = Array.from(list.children);
     const io = new IntersectionObserver(
       (entries) => {
+        if (store.chapters.capabilities?.sticky) return;
         for (const entry of entries) {
-          if (entry.isIntersecting) setActive(rows.indexOf(entry.target));
+          if (entry.isIntersecting) fromScroll(rows.indexOf(entry.target));
         }
       },
       { rootMargin: '-50% 0px -50% 0px' },
     );
     rows.forEach((row) => io.observe(row));
     return () => io.disconnect();
-  }, [layout]);
+  }, [fromScroll]);
+
+  // The plate focus follows the displayed film (full motion) or the poster
+  // (reduced motion); built with the chapter's gsap context.
+  const reveal = useCallback((ctx: ChapterContext) => {
+    let F = -1;
+    let claimed = -1;
+    const sync = () => {
+      const shown = ctx.reduced ? posterF() === StateId.STACK : F >= FOCUS_GATE[0] && F <= FOCUS_GATE[1];
+      const want = shown ? activeK.current : -1;
+      if (want === claimed) return;
+      claimed = want;
+      if (want >= 0) claimFocus(FOCUS_OWNER, [want], PLATE_GROUPS, { focusOn: 1 });
+      else releaseFocus(FOCUS_OWNER);
+    };
+    syncFocus.current = sync;
+    const off = ctx.reduced
+      ? subscribeScroll(sync)
+      : watchFilm(ctx.gsap, (f) => {
+          if (f === F) return;
+          F = f;
+          sync();
+        });
+    sync();
+    return () => {
+      off();
+      syncFocus.current = () => {};
+      releaseFocus(FOCUS_OWNER);
+    };
+  }, []);
 
   return (
     <Chapter
       id="capabilities"
       labelledBy={titleId}
+      onProgress={onProgress}
+      reveal={reveal}
       stageClassName="pb-24 desktop:flex desktop:flex-col desktop:justify-center-safe desktop:pt-[max(104px,11svh)] desktop:pb-[max(48px,4svh)]"
     >
       {/* Mobile: the stack slot opens the chapter (§4.2). Hidden on desktop. */}
@@ -93,13 +211,16 @@ export default function Capabilities() {
             than 48px would darken each other's text. */}
         <div data-safe className={COLUMN}>
           <ChapterHeading heading={capabilities.heading} id={titleId} />
-          <p className={`t-display-l mt-5 text-balance text-ink staged:mt-[clamp(12px,2svh,24px)] ${STATEMENT_FS}`}>
+          <p
+            data-reveal="lines"
+            className={`t-display-l mt-5 text-balance text-ink staged:mt-[clamp(12px,2svh,24px)] ${STATEMENT_FS}`}
+          >
             {capabilities.statement.lead} <span className="t-accent">{capabilities.statement.accent}</span>
           </p>
 
-          <ol ref={listRef} className="mt-12 staged:mt-[clamp(16px,3svh,48px)]">
+          <ol ref={listRef} className={`mt-12 staged:mt-[clamp(16px,3svh,48px)] ${LOW.list}`}>
             {capabilities.items.map((item, i) => (
-              <CapabilityRow key={item.title} item={item} index={i} active={i === active} onActivate={setActive} />
+              <CapabilityRow key={item.title} item={item} index={i} active={i === active} onActivate={onActivate} />
             ))}
           </ol>
         </div>
@@ -125,11 +246,13 @@ function CapabilityRow({ item, index, active, onActivate }: CapabilityRowProps) 
     <li
       data-group={index}
       data-active={active || undefined}
+      data-reveal="up"
+      data-reveal-window="40,5"
       onPointerEnter={(e) => {
         if (e.pointerType !== 'touch') onActivate(index);
       }}
       onClick={() => onActivate(index)}
-      className="group relative border-t border-line py-6 last:border-b staged:py-[clamp(6px,1.1svh,20px)]"
+      className={`group relative border-t border-line py-6 last:border-b staged:py-[clamp(6px,1.1svh,20px)] ${LOW.row}`}
     >
       <span
         aria-hidden="true"
@@ -148,7 +271,7 @@ function CapabilityRow({ item, index, active, onActivate }: CapabilityRowProps) 
           {String(index + 1).padStart(2, '0')}
         </span>
       </div>
-      <p className="t-body mt-3 text-ink-2 staged:mt-[clamp(4px,0.9svh,10px)]">{item.description}</p>
+      <p className={`t-body mt-3 text-ink-2 staged:mt-[clamp(4px,0.9svh,10px)] ${LOW.desc}`}>{item.description}</p>
     </li>
   );
 }

@@ -1,9 +1,41 @@
 import { Lock } from 'lucide-react';
+import { useEffect, type FocusEvent, type PointerEvent } from 'react';
 import Chapter from '../components/Chapter';
 import ChapterHeading from '../components/ChapterHeading';
 import LinkLabel from '../components/LinkLabel';
 import { nda } from '../content/site';
 import { headingId } from '../scroll/chapters';
+import type { ChapterContext } from '../scroll/useChapter';
+import { setCharge } from './choreo/fx';
+
+/** §5 C2: the text fades up while the section top moves from 75% to 35% of the viewport (stagger .05). */
+const TEXT_WINDOW = ['top 75%', 'top 35%'] as const;
+const CHARGE_OWNER = 'nda';
+
+/**
+ * The fade-ups (§5 C2). Desktop: the section window above (NDA is a flow
+ * chapter, so this is its transit-in). Mobile: the S3 slot opens the
+ * chapter and the text sits below it, so the text uses its own flow window
+ * (ctx.window: its top 92% → 70%). Reduced motion: fadeUp is a no-op.
+ */
+function ndaReveal(ctx: ChapterContext): void {
+  const els = Array.from(ctx.section.querySelectorAll<HTMLElement>('[data-nda-text] > *'));
+  if (els.length === 0) return;
+  const win =
+    ctx.layout === 'desktop'
+      ? { trigger: ctx.section, start: TEXT_WINDOW[0], end: TEXT_WINDOW[1] }
+      : ctx.window(els[0], 92, 70);
+  ctx.track(ctx.fadeUp(els, { window: win, stagger: 0.05 }));
+}
+
+/** "Request by email" hover / keyboard focus → uCharge on S3: the scan speeds up, a peek that reveals nothing. */
+const chargeOn = (e: PointerEvent) => {
+  if (e.pointerType !== 'touch') setCharge(CHARGE_OWNER, true);
+};
+const chargeOff = () => setCharge(CHARGE_OWNER, false);
+const focusOn = (e: FocusEvent<HTMLElement>) => {
+  if (e.currentTarget.matches(':focus-visible')) setCharge(CHARGE_OWNER, true);
+};
 
 /**
  * C2 NDA — #work (SPEC §5 C2). A flow chapter: min 90svh on desktop with
@@ -11,21 +43,29 @@ import { headingId } from '../scroll/chapters';
  * the right (54 → 92vw, 42.5svh tall, centred in the section). On mobile
  * the S3 field slot (44svh) opens the chapter and the text follows it.
  *
- * Hooks for later phases:
+ * Hooks:
  * - `[data-field-anchor="S3"]`: the desktop box sits in the stage (which
  *   starts at the section top, the anchor's frame); the mobile box lives in
  *   the `.field-slot`. Each is display:none in the other layout.
  * - `[data-safe]` on the text block (scrim + text-safe mask, §2.3).
- * - `[data-charge="S3"]` on the email link: hover / focus sets `uCharge`
- *   on S3 (the scan speeds up; it is a peek that reveals nothing).
+ *
+ * Choreography (§5 C2): seg2 (the topple, S2 → S3) runs from `work` − 85vh
+ * to − 25vh, scrubbed by the director. The text fades up (16px) while the
+ * section top moves from 75% to 35% (stagger .05). Hovering or keyboard-
+ * focusing "Request by email" (`[data-charge="S3"]`) sets uCharge on S3 —
+ * the scan speeds up ×3 and the slabs dim top → bottom: a peek that
+ * reveals nothing. Reduced motion: the text is simply there; the charge
+ * still applies (the engine renders it on demand).
  */
 export default function Nda() {
   const titleId = headingId('work');
+  useEffect(() => () => setCharge(CHARGE_OWNER, false), []);
 
   return (
     <Chapter
       id="work"
       labelledBy={titleId}
+      reveal={ndaReveal}
       stageClassName="pb-24 desktop:flex desktop:min-h-(--chapter-flow-h) desktop:items-center desktop:py-24"
     >
       {/* Mobile: the redaction slot opens the chapter (§4.2). Hidden on desktop. */}
@@ -35,7 +75,7 @@ export default function Nda() {
       </div>
 
       <div className="px-gutter mobile:pt-2">
-        <div data-safe className="desktop:w-[min(40vw,34rem)]">
+        <div data-safe data-nda-text className="desktop:w-[min(40vw,34rem)]">
           <ChapterHeading heading={nda.heading} id={titleId} />
 
           <p className="t-label mt-14 flex items-center gap-2.5 text-ember desktop:mt-16">
@@ -47,7 +87,15 @@ export default function Nda() {
 
           <p className="t-body mt-6 text-ink-2">{nda.body}</p>
 
-          <a href={nda.cta.href} data-charge="S3" className="btn btn-line mt-10">
+          <a
+            href={nda.cta.href}
+            data-charge="S3"
+            onPointerEnter={chargeOn}
+            onPointerLeave={chargeOff}
+            onFocus={focusOn}
+            onBlur={chargeOff}
+            className="btn btn-line mt-10"
+          >
             <LinkLabel cta={nda.cta} />
           </a>
         </div>

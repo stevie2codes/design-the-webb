@@ -14,10 +14,15 @@
  *   `segments` (via segments.resolve), `version`, and the scrubbed fx
  *   (`disperse`, `sink`).
  * - UI handlers: `fx.charge`, `fx.groupW`, `fx.focusOn`, `fx.nova`,
- *   `fx.beat`, `flags.menuOpen`, `flags.rewinding`, `route`.
- * - engine: `fx.printed`, `fx.scanX`, `fx.exposure` (intro, print,
- *   ignition), `fx.ripple`, `pointer`, `flags.intro`, `flags.hidden`,
+ *   `fx.beat`, `flags.menuOpen`, `flags.rewinding`, `route`. `fx.groupW` /
+ *   `fx.focusOn` are arbitrated by chapters/choreo/fx.ts (`claimFocus` /
+ *   `releaseFocus`, newest claim wins) and `fx.charge` by its `setCharge`:
+ *   new writers go through those.
+ * - engine: `fx.printed`, `fx.scanX`, `fx.exposure` (intro, print),
+ *   `fx.ripple`, `pointer`, `flags.intro`, `flags.hidden`,
  *   `film.override` during the intro.
+ * - C5 Contact (chapters/choreo/contact.ts, via choreo/fx.ts):
+ *   `fx.exposure` during the ignition (1 → 1.35 → 1, 600 ms).
  * - director (tick): `film.target`, `film.shown`, `film.farFor`,
  *   `film.lastCut`, `flags.printedLock`.
  * - `fx.opacity`: route transitions / menu (UI). The jump cut does NOT
@@ -110,7 +115,8 @@ export interface AnchorRecord {
  * field — a type-level addition to §9.2 (inactive panels stay in the DOM).
  */
 export interface SafeRecord {
-  chapter: ChapterId;
+  /** 'page': a route without chapters (detail pages, the 404), document px (anchors.ts registerPageRects). */
+  chapter: ChapterId | 'page';
   x0: number;
   y0: number;
   x1: number;
@@ -178,9 +184,14 @@ export interface EnteringParams {
 export type Vec4 = [number, number, number, number];
 export type Vec3 = [number, number, number];
 
-/** `uSafe[6]` + `uSafeCount`: `rects` holds 6 × (x0, y0, x1, y1) in viewport CSS px. */
+/**
+ * `uSafe[6]` + `uSafeW[6]` + `uSafeCount`: `rects` holds 6 × (x0, y0, x1, y1)
+ * in viewport CSS px; `weights` 6 mask strengths in [0, 1] (1 = the full
+ * §2.3 mask; a C3 panel's blocks ramp with their text reveal / exit).
+ */
 export interface SafeRectBuffer {
   readonly rects: Float32Array;
+  readonly weights: Float32Array;
   count: number;
 }
 

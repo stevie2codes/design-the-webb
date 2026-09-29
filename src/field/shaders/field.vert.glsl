@@ -76,6 +76,10 @@
 // once discs are capped).
 #define BOKEH_SPREAD vec2(0.5, 1.5)
 #define BOKEH_FALLOFF 1.3
+// TOPPLE (tuned): fall to ~80° under gravity over tl 0 → .5; glide to the slab (cubic) over tl .4 → 1.
+#define TOPPLE_ANGLE 1.4
+#define TOPPLE_FALL 0.5
+#define TOPPLE_GLIDE 0.4
 
 in vec4 aSeed; // x size, y twinkle rate, z scroll inertia, w bokeh eligibility (< .35)
 
@@ -113,6 +117,7 @@ uniform vec4 uRipple; // x, y (su), t0 (s), amp
 uniform float uScrollPx;
 uniform float uVelocity;
 uniform vec4 uSafe[6]; // viewport CSS px: x0, y0, x1, y1
+uniform float uSafeW[6]; // per-rect weight: 1 full mask, 0 off (a block whose text is still revealing)
 uniform int uSafeCount;
 uniform float uGroupW[8];
 uniform float uFocusOn;
@@ -120,6 +125,7 @@ uniform float uDisperse;
 uniform float uCharge;
 uniform float uNova;
 uniform float uBeat;
+uniform float uSink; // S9 beacon sink 0 → 1 (fx.sink)
 uniform float uScanX;
 uniform float uPrinted;
 uniform vec2 uBarPivot[3];
@@ -172,14 +178,27 @@ vec3 pathMix(int path, vec3 pa, vec3 pb, float e, float tl, vec4 mA) {
     return p;
   }
   if (path == P_TOPPLE) {
-    // Quadratic Bézier pa → c → pb with c = pivot + R(−60°)(pa − pivot): the
-    // bars fall to the right like dominoes. Pivots are S2-local (A side).
+    // Tuned (CONTRACTS.md; §3.6 is a quadratic Bézier through pivot + R(−60°)):
+    // each bar (groups 0–3: bars and their fizz) tips RIGIDLY about its
+    // bottom-right corner — accelerating like a falling domino, to TOPPLE_ANGLE
+    // — and, overlapping the fall, glides into its redaction slab. The
+    // generator keys whole bars (0, .45, .9), so they fall one after another.
+    // The Bézier smeared each bar toward its target and never read as a
+    // fall. Axis, gridlines, halo and the AI point morph directly. Pivots
+    // are S2-local (A side).
     int g = groupOf(mA);
-    vec2 pv = uBarPivot[g <= 1 ? g : 2] * uOffA.z + uOffA.xy;
-    vec2 d = pa.xy - pv;
-    vec3 c = vec3(pv + vec2(0.5 * d.x + 0.8660254 * d.y, -0.8660254 * d.x + 0.5 * d.y), mix(pa.z, pb.z, 0.5));
-    float u = 1.0 - e;
-    return u * u * pa + 2.0 * u * e * c + e * e * pb;
+    if (g <= 3) {
+      vec2 pv = uBarPivot[g <= 1 ? g : 2] * uOffA.z + uOffA.xy;
+      // On the linear clock: cubicInOut would cram the whole fall into its
+      // steep middle, and the bar's small key spread would fan it out.
+      float r = clamp(tl / TOPPLE_FALL, 0.0, 1.0);
+      float th = -TOPPLE_ANGLE * r * r;
+      float c = cos(th);
+      float s = sin(th);
+      vec2 d = pa.xy - pv;
+      vec3 fallen = vec3(pv + vec2(c * d.x - s * d.y, s * d.x + c * d.y), pa.z);
+      return mix(fallen, pb, cubicInOut(clamp((tl - TOPPLE_GLIDE) / (1.0 - TOPPLE_GLIDE), 0.0, 1.0)));
+    }
   }
   vec3 p = mix(pa, pb, e);
   if (path == P_DIGITIZE) {
@@ -353,7 +372,7 @@ void main() {
     vec4 r = uSafe[k];
     vec2 d = max(r.xy - px, px - r.zw);
     float x = clamp(1.0 - max(d.x, d.y) / SAFE_FEATHER, 0.0, 1.0);
-    float inside = x * x * x * (x * (x * 6.0 - 15.0) + 10.0);
+    float inside = x * x * x * (x * (x * 6.0 - 15.0) + 10.0) * uSafeW[k];
     alpha *= mix(1.0, SAFE_ALPHA_MUL, inside);
     rampPos = mix(rampPos, min(rampPos, 0.5), inside);
     insideMax = max(insideMax, inside);

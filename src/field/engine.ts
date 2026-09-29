@@ -109,6 +109,11 @@ class FieldEngine {
   private bootJob = -1;
   /** Lazy single-state jobs (states outside the boot order, e.g. S10 on the 404). */
   private readonly lazyJobs = new Set<number>();
+  /**
+   * Home states not built yet because the page booted on the 404 (§3.4 "S10
+   * lazily, only on the 404"): generated once the route leaves the 404.
+   */
+  private deferredHome: StateId[] | null = null;
   /** Every state asked for once (boot, lazy): never re-requested. */
   private readonly requested = new Set<StateId>();
   private pending: {
@@ -159,6 +164,8 @@ class FieldEngine {
   private dirtyReq = false;
   private dirtyUntil = 0;
   private frozenTime = 0;
+  /** The last frame drawn was settled (reduced motion stops only after drawing one). */
+  private shownSettled = false;
   private seenVersion = -1;
   private fps = 60;
   private rendered = 0;
@@ -327,9 +334,15 @@ class FieldEngine {
     this.dust = makeDust(this.layout, view.A);
     this.set = new TextureSet(spec.texH, view.W, view.H);
     this.genLayoutMode = store.layout;
-    this.bootJob = this.gen.start(this.jobFor(WORKER_BOOT_ORDER, view));
-    for (const id of WORKER_BOOT_ORDER) this.requested.add(id);
+    // Route-aware (§3.4): a direct hit on the 404 builds the only state it
+    // shows first, S10 right after S0, and leaves S2–S9 until a home route
+    // (NotFoundPage's enterRoute('404') has run before this idle boot).
+    const on404 = store.route.kind === '404';
+    const first: readonly StateId[] = on404 ? [StateId.STATIC, StateId.FLATLINE] : WORKER_BOOT_ORDER;
+    this.bootJob = this.gen.start(this.jobFor(first, view));
+    for (const id of first) this.requested.add(id);
     this.requested.add(StateId.NAME);
+    this.deferredHome = on404 ? WORKER_BOOT_ORDER.filter((id) => !first.includes(id)) : null;
 
     const fontReady = await waitForNameFont();
     if (this.disposed) return;
@@ -444,12 +457,40 @@ class FieldEngine {
     if (this.disposed) return;
     if (job === this.bootJob || this.lazyJobs.has(job)) {
       this.set.set(id, pos, meta, extras);
+      this.upload(this.set, id);
       this.onSetChanged();
       this.maybeReady();
     } else if (this.pending && job === this.pending.job) {
       this.pending.set.set(id, pos, meta, extras);
+      this.upload(this.pending.set, id);
       this.maybeSwap();
     }
+  }
+
+  /**
+   * §9.9 "uploaded when it arrives": push a state's textures to the GPU now,
+   * not on the first frame that draws it — a far jump would otherwise pay
+   * two RGBA32F uploads in that frame (a long first frame mid jump cut).
+   */
+  private upload(set: TextureSet, id: StateId): void {
+    if (this.dead || this.lost) return;
+    const p = set.pos[id];
+    const m = set.meta[id];
+    if (p) this.renderer.initTexture(p);
+    if (m) this.renderer.initTexture(m);
+  }
+
+  /** The route left the 404 it booted on: build the home states now (queued behind any job). */
+  private buildDeferredHome(): void {
+    const ids = this.deferredHome;
+    this.deferredHome = null;
+    if (!ids || !this.layout) return;
+    const todo = ids.filter((id) => !this.requested.has(id));
+    if (!todo.length) return;
+    for (const id of todo) this.requested.add(id);
+    const g = this.set;
+    const view = { W: g.genW, H: g.genH, A: g.genW / g.genH, svh: this.viewport().svh };
+    this.lazyJobs.add(this.gen.start(this.jobFor(todo, view), false));
   }
 
   /** §3.4: S10 (and any state outside the boot order) is generated when a frame first needs it. */
@@ -544,6 +585,7 @@ class FieldEngine {
     if (s.version !== this.seenVersion) this.onStoreVersion();
     if (this.ready && s.layout !== this.genLayoutMode) this.regenerate();
 
+    if (this.deferredHome && s.route.kind !== '404') this.buildDeferredHome();
     const f = tick(s, deltaMs / 1000, time);
     this.frameCutting = f.cutting;
     if (!this.set.has(f.a)) this.requestLazy(f.a);
@@ -562,7 +604,11 @@ class FieldEngine {
       if (this.mode === 'reduced') {
         // On demand (§8.2): render while invalidated or still settling; at
         // rest leave the ticker, so gsap can sleep (no rAF loop at rest).
-        if (time > this.dirtyUntil && f.settled) {
+        // Stop only once a SETTLED frame is on screen: with frames > 100 ms
+        // apart (a hitch, software GL) the frame that finishes a poster
+        // crossfade could arrive after the window closed and never be drawn,
+        // leaving the canvas on a half-faded poster.
+        if (time > this.dirtyUntil && f.settled && this.shownSettled) {
           this.stopTicking();
           return;
         }
@@ -575,6 +621,7 @@ class FieldEngine {
     this.writeUniforms(f);
     if (this.mode === 'reduced' && f.seg < 0 && f.a !== f.b && store.film.override === null) this.renderCrossfade(f);
     else this.renderer.render(this.scene, this.camera);
+    this.shownSettled = f.settled;
     this.rendered++;
     this.debug?.afterRender(f);
     if (!force) this.measure(deltaMs);
@@ -709,6 +756,7 @@ class FieldEngine {
     u.uVelocity.value = f.velocity;
 
     u.uSafe.value = f.safe.rects;
+    u.uSafeW.value = f.safe.weights;
     u.uSafeCount.value = f.safe.count;
     u.uGroupW.value = f.groupW;
     u.uFocusOn.value = f.focusOn;
@@ -716,6 +764,7 @@ class FieldEngine {
     u.uCharge.value = f.charge;
     u.uNova.value = f.nova;
     u.uBeat.value = f.beat;
+    u.uSink.value = f.sink;
     u.uScanX.value = f.scanX;
     u.uPrinted.value = f.printed;
     u.uOpacity.value = f.opacity * this.opacityMul.v;
@@ -896,8 +945,9 @@ class FieldEngine {
     const expect = new Set<StateId>();
     for (let id = 0; id <= StateId.FLATLINE; id++) if (this.set.has(id as StateId)) expect.add(id as StateId);
     // The boot order plus any lazily requested state (resident or in flight:
-    // a superseded lazy job would otherwise never deliver).
-    const ids: StateId[] = [...WORKER_BOOT_ORDER];
+    // a superseded lazy job would otherwise never deliver) — minus the home
+    // states a 404 boot has not asked for yet (buildDeferredHome).
+    const ids: StateId[] = WORKER_BOOT_ORDER.filter((id) => !this.deferredHome?.includes(id));
     for (const id of this.requested) {
       if (id === StateId.NAME || ids.includes(id)) continue;
       ids.push(id);

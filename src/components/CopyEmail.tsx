@@ -38,6 +38,9 @@ async function copyText(text: string, source: HTMLElement | null): Promise<boole
 
 export interface CopyEmailProps {
   className?: string;
+  /** Scroll reveal hooks (useChapter's declarative reveals), forwarded to the row. */
+  'data-reveal'?: 'up' | 'lines';
+  'data-reveal-window'?: string;
 }
 
 /**
@@ -54,7 +57,7 @@ export interface CopyEmailProps {
  * No scrim of its own: when it sits over the field, wrap it (with the text
  * around it) in one [data-safe] block.
  */
-export default function CopyEmail({ className = '' }: CopyEmailProps) {
+export default function CopyEmail({ className = '', ...reveal }: CopyEmailProps) {
   const [copied, setCopied] = useState(false);
   const timer = useRef<number | undefined>(undefined);
   const addressRef = useRef<HTMLSpanElement>(null);
@@ -83,7 +86,7 @@ export default function CopyEmail({ className = '' }: CopyEmailProps) {
   );
 
   return (
-    <div className={`flex flex-wrap items-center justify-center gap-x-6 gap-y-3 ${className}`}>
+    <div {...reveal} className={`flex flex-wrap items-center justify-center gap-x-6 gap-y-3 ${className}`}>
       {/* Desktop: an invisible twin of the button on the left keeps the
           address itself on the page's centre axis (beacon, headline, body). */}
       <span aria-hidden="true" className="btn btn-line invisible gap-2.5 px-5 mobile:hidden nojs:hidden">

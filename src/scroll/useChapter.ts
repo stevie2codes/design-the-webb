@@ -16,7 +16,9 @@
  * - `onUpdate` / `onToggle` write `progress` / `active` (no layout reads);
  * - the chapter's reveals: declarative `[data-reveal]` elements (below) and
  *   the `reveal(ctx)` callback. They complete during the transit-in (hold
- *   rule) and are all reverted with the context. The reveal helpers
+ *   rule) and are all reverted with the context, then each tracked
+ *   reveal's own revert() clears what it wrote (track() every reveal that
+ *   writes inline styles). The reveal helpers
  *   (SplitText) are a further lazy chunk, loaded only by a chapter that has
  *   `[data-reveal]` elements or a `reveal` callback.
  *
@@ -234,6 +236,12 @@ export function useChapter(
       teardown = () => {
         if (typeof cleanup === 'function') cleanup();
         gctx.revert();
+        // Then each tracked reveal: the context revert alone can leave a
+        // from-state behind (a staggered fade-up built past its window, a
+        // hand-written mask), and a stale `opacity: 0` would hide text in
+        // every later mode (§8.2, §8.4). Reveal.revert() is idempotent and
+        // ends with a clear of what it wrote.
+        for (const r of reveals) r.revert();
         reveals.length = 0;
         clearChapterRects(id);
         delete store.chapters[id];

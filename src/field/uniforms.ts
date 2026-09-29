@@ -56,7 +56,7 @@ export type Role = (typeof Role)[keyof typeof Role];
 
 /** Array uniform sizes (§3.5). The director fills buffers of exactly these sizes. */
 export const LIMITS = {
-  /** `uSafe[6]`: text-safe rects (the nav band + 5 blocks). */
+  /** `uSafe[6]` / `uSafeW[6]`: text-safe rects (the nav band + 5 blocks) and their weights. */
   safeRects: 6,
   /** `uGroupW[8]`: per-group focus weights. */
   groups: 8,
@@ -164,7 +164,9 @@ export const STATE_PARAMS: Readonly<Record<StateId, StateParams>> = {
     idle: { amp: 0.002, ...IDLE_HOLD },
     aperture: 0.04,
     mouse: MouseMode.PUSH,
-    enter: { stagger: 0.45, turb: 0.06, path: PathId.TOPPLE },
+    // §3.9 T .06; tuned (CONTRACTS.md): at .06 the curl noise scatters each
+    // bar into a cloud mid-fall; at .015 every bar visibly topples as a piece.
+    enter: { stagger: 0.45, turb: 0.015, path: PathId.TOPPLE },
   },
   [StateId.PULSE]: {
     density: 0.55,
@@ -195,7 +197,9 @@ export const STATE_PARAMS: Readonly<Record<StateId, StateParams>> = {
     enter: { stagger: 0.35, turb: 0.4, path: PathId.DEFAULT },
   },
   [StateId.STACK]: {
-    density: 0.5,
+    // §3.9 .5; tuned at integration: the isometric plates are thin hairlines
+    // and read too faint at .5.
+    density: 0.7,
     idle: { amp: 0.003, ...IDLE_HOLD },
     // Plus a per-group blur (+1.2 CoC for unfocused plates) in the shader.
     aperture: 0.04,
@@ -258,13 +262,17 @@ export const POSTER_TIME: Readonly<Record<StateId, number>> = {
   [StateId.NAME]: 0,
   [StateId.CHART]: 0,
   [StateId.REDACTED]: 0,
-  [StateId.PULSE]: 0,
-  [StateId.LATTICE]: 0,
+  // PULSE_POSTER_T (s04-pulse.ts) = 2.4 × .4091166: the highlight on the spike apex, the newest ring just pinged.
+  [StateId.PULSE]: 0.9819,
+  // LATTICE_POSTER_T (s05-lattice.ts): mid-hold, the building fully printed.
+  [StateId.LATTICE]: 3.5,
   [StateId.DECK]: 0,
   [StateId.CONSTELLATION]: 0,
   [StateId.STACK]: 0,
   [StateId.BEACON]: 0,
-  [StateId.FLATLINE]: 0,
+  // FLAT_POSTER_T (s10-flatline.ts) = 3.2 × .78 / 1.12: the scan head at .72 of the line, flat.
+  // Literals, not imports: importing a generator would pull it into the initial bundle.
+  [StateId.FLATLINE]: 2.2285714,
 };
 
 /** Hero scan beam "off" position (su): far outside any shape, so no particle brightens. */

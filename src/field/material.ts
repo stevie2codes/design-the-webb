@@ -37,9 +37,27 @@ function trimGlsl(src: string): string {
     .join('\n');
 }
 
+/**
+ * Per-state live functions (shaders/live/sNN.glsl), spliced into live.glsl at
+ * `// @include states` in file order. Adding a state's live() = drop its file
+ * there and add its `case` to live.glsl's switch.
+ */
+const stateLive = import.meta.glob<string>('./shaders/live/s[0-9][0-9].glsl', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+});
+const STATES_SRC = Object.keys(stateLive)
+  .sort()
+  .map((k) => trimGlsl(stateLive[k]))
+  .join('\n');
+
+// Function replacers: GLSL never contains `$`, but a string replacement would
+// still interpret `$&`-style patterns.
 const VERTEX = trimGlsl(vertSrc)
-  .replace('// @include noise', trimGlsl(noiseSrc))
-  .replace('// @include live', trimGlsl(liveSrc));
+  .replace('// @include noise', () => trimGlsl(noiseSrc))
+  .replace('// @include live', () => trimGlsl(liveSrc))
+  .replace('// @include states', () => STATES_SRC);
 const FRAGMENT = trimGlsl(fragSrc);
 
 /** Palette ramp as sRGB floats (the output is not colour-managed: what we write is what shows). */
@@ -117,6 +135,7 @@ export interface FieldUniforms {
   uScrollPx: IUniform<number>;
   uVelocity: IUniform<number>;
   uSafe: IUniform<Float32Array>;
+  uSafeW: IUniform<Float32Array>;
   uSafeCount: IUniform<number>;
   uGroupW: IUniform<Float32Array>;
   uFocusOn: IUniform<number>;
@@ -124,6 +143,7 @@ export interface FieldUniforms {
   uCharge: IUniform<number>;
   uNova: IUniform<number>;
   uBeat: IUniform<number>;
+  uSink: IUniform<number>;
   uScanX: IUniform<number>;
   uPrinted: IUniform<number>;
   uBarPivot: IUniform<Float32Array>;
@@ -172,6 +192,7 @@ export function createUniforms(placeholder: { pos: DataTexture; meta: DataTextur
     uScrollPx: { value: 0 },
     uVelocity: { value: 0 },
     uSafe: { value: new Float32Array(LIMITS.safeRects * 4) },
+    uSafeW: { value: new Float32Array(LIMITS.safeRects).fill(1) },
     uSafeCount: { value: 0 },
     uGroupW: { value: new Float32Array(LIMITS.groups).fill(1) },
     uFocusOn: { value: 0 },
@@ -179,6 +200,7 @@ export function createUniforms(placeholder: { pos: DataTexture; meta: DataTextur
     uCharge: { value: 0 },
     uNova: { value: 0 },
     uBeat: { value: 0 },
+    uSink: { value: 0 },
     uScanX: { value: -1e4 },
     uPrinted: { value: 0 },
     uBarPivot: { value: new Float32Array(LIMITS.barPivots * 2) },

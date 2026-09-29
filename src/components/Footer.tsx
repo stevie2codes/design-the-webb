@@ -1,4 +1,5 @@
 import type { MouseEvent } from 'react';
+import { registerHorizon } from '../chapters/choreo/horizon';
 import { footer, socials } from '../content/site';
 import { rewind } from '../motion/lenis';
 import { headingId } from '../scroll/chapters';
@@ -35,6 +36,13 @@ function backToTop(event: MouseEvent<HTMLAnchorElement>): void {
  * the © line last. The outline wordmark closes the page, cropped by its
  * bottom edge.
  *
+ * The sunset (§1 "Credits", §5 C5 sink): as the beacon sets behind this
+ * edge, the horizon warms — an ember line and a faint light spill centred
+ * where the beacon goes down, their opacity written by Contact's sink
+ * trigger (choreo/horizon.ts; 0 at rest, under reduced motion and without
+ * JS). The © label (ink-3) sits clear of the spill, so it stays on solid
+ * `deep` (§2.3 rule 1).
+ *
  * Hooks: `a[data-back-to-top]` (the rewind).
  */
 export default function Footer() {
@@ -42,6 +50,10 @@ export default function Footer() {
 
   return (
     <footer className="relative z-2 flex flex-col overflow-hidden border-t border-line bg-deep desktop:min-h-[40svh]">
+      <div ref={registerHorizon} aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-24 opacity-0">
+        <span className="absolute inset-x-[20%] top-0 h-px bg-linear-to-r from-transparent via-ember/80 to-transparent" />
+        <span className="absolute inset-0 bg-[radial-gradient(34%_100%_at_50%_0%,rgb(255_106_61/0.1),transparent_100%)]" />
+      </div>
       <div className="grid gap-y-5 px-gutter pt-8 desktop:grid-cols-[1fr_auto_1fr] desktop:items-center desktop:gap-x-10 desktop:pt-[max(40px,5svh)]">
         {/* The prerender bakes in the build year; the client may differ at New Year. */}
         <p suppressHydrationWarning className="t-label order-last pt-3 text-ink-3 desktop:order-none desktop:pt-0">

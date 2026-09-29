@@ -12,7 +12,7 @@
  */
 import { StateId } from '../field/states/ids.ts';
 import { PathId, STATE_PARAMS } from '../field/uniforms.ts';
-import { activeSafeRects, anchorTransform, createSafeRectBuffer } from './anchors.ts';
+import { activeSafeRects, anchorTransform, createSafeRectBuffer, hangInView } from './anchors.ts';
 import { CHAPTER_STATE, HOME_ORDER } from './chapters.ts';
 import { HERO_P } from './segments.ts';
 import type {
@@ -158,12 +158,43 @@ function targetOf(s: FieldStore): number {
   return Math.min(FILM_MAX, ceiling, Math.max(0, F));
 }
 
-/** Snap the displayed film to its target now (nav jump cut step 3, jump-cut resync, §4.4, §6). */
+/**
+ * Snap the displayed film to its target now (nav jump cut step 3, jump-cut
+ * resync, §4.4, §6) — and the damped fx with it (disperse, charge, groupW,
+ * focusOn), so a resync never grows or dims the shape it cut to (§6: "never
+ * morphs through intermediate states").
+ */
 export function snapFilm(s: FieldStore): void {
   s.film.target = targetOf(s);
   s.film.shown = s.film.target;
   s.film.farFor = 0;
+  cutPhase = CUT_NONE;
+  snapFx(s);
 }
+
+/** The frame's damped fx take their targets now. */
+function snapFx(s: FieldStore): void {
+  const fx = s.fx;
+  FRAME.groupW.set(fx.groupW);
+  FRAME.focusOn = fx.focusOn;
+  FRAME.charge = fx.charge;
+  FRAME.disperse = fx.disperse;
+}
+
+/**
+ * The director's own jump cut (§4.4) is a small state machine: fading out
+ * (the old picture), then fading in on the target. The snap happens on the
+ * FIRST frame at or past the fade-out, however late that frame is (a stall:
+ * first texture binds, GC, a busy tab), and the detector is not re-armed
+ * until the fade-in is over — so one cut can never turn into several with
+ * the old picture flashing back in between. A frame that arrives more than
+ * half a fade-in late restarts the fade-in from the snap.
+ */
+const CUT_NONE = 0;
+const CUT_OUT = 1;
+const CUT_IN = 2;
+let cutPhase = CUT_NONE;
+let cutInAt = 0;
 
 // ---------------------------------------------------------------------------
 // The frame.
@@ -320,13 +351,19 @@ export function tick(s: FieldStore, dtIn: number, now: number): FieldFrame {
   let cutAlpha = 1;
 
   // fx first (§9.5 step 3, moved ahead of the uniform writes): damped
-  // targets (groupW, focusOn, charge, disperse); the rest is copied.
+  // targets (groupW, focusOn, charge, disperse); the rest is copied. Reduced
+  // motion's posters take them as they are (§8.2: no animation — and a
+  // damped value would freeze part-way when the on-demand loop stops).
   const fx = s.fx;
-  const kG = dampK(dt, FX_DUR.groupW);
-  for (let i = 0; i < 8; i++) f.groupW[i] += (fx.groupW[i] - f.groupW[i]) * kG;
-  f.focusOn += (fx.focusOn - f.focusOn) * dampK(dt, FX_DUR.focusOn);
-  f.charge += (fx.charge - f.charge) * dampK(dt, FX_DUR.charge);
-  f.disperse += (fx.disperse - f.disperse) * dampK(dt, FX_DUR.disperse);
+  if (posters) {
+    snapFx(s);
+  } else {
+    const kG = dampK(dt, FX_DUR.groupW);
+    for (let i = 0; i < 8; i++) f.groupW[i] += (fx.groupW[i] - f.groupW[i]) * kG;
+    f.focusOn += (fx.focusOn - f.focusOn) * dampK(dt, FX_DUR.focusOn);
+    f.charge += (fx.charge - f.charge) * dampK(dt, FX_DUR.charge);
+    f.disperse += (fx.disperse - f.disperse) * dampK(dt, FX_DUR.disperse);
+  }
   f.nova = fx.nova;
   f.beat = fx.beat;
   f.sink = fx.sink;
@@ -339,6 +376,7 @@ export function tick(s: FieldStore, dtIn: number, now: number): FieldFrame {
   f.ripple[3] = fx.ripple[3];
 
   if (!posters) posterTo = -1;
+  if (routePair || posters) cutPhase = CUT_NONE;
 
   if (routePair) {
     // 1. Route mode (§9.4): the override pair is shown directly.
@@ -401,24 +439,47 @@ export function tick(s: FieldStore, dtIn: number, now: number): FieldFrame {
     if (o?.snap) {
       s.film.shown = Fstar;
       s.film.farFor = 0;
+      cutPhase = CUT_NONE;
     } else {
-      // Jump cut (§4.4): |F* − F| > 1.5 for > 80 ms, not rewinding, not in the intro.
-      const far =
-        !s.flags.rewinding && !s.flags.intro && Math.abs(Fstar - s.film.shown) > JUMP_CUT.threshold;
-      s.film.farFor = far ? s.film.farFor + dt : 0;
-      if (s.film.farFor > JUMP_CUT.sustain && now - s.film.lastCut > JUMP_CUT.cooldown) {
-        s.film.lastCut = now;
+      // Jump cut (§4.4): |F* − F| > 1.5 for > 80 ms, not rewinding, not in the
+      // intro; the detector is disarmed while a cut runs (see CUT_*).
+      if (cutPhase === CUT_NONE) {
+        const far =
+          !s.flags.rewinding && !s.flags.intro && Math.abs(Fstar - s.film.shown) > JUMP_CUT.threshold;
+        s.film.farFor = far ? s.film.farFor + dt : 0;
+        if (s.film.farFor > JUMP_CUT.sustain && now - s.film.lastCut > JUMP_CUT.cooldown) {
+          s.film.lastCut = now;
+          s.film.farFor = 0;
+          cutPhase = CUT_OUT;
+        }
+      } else {
         s.film.farFor = 0;
       }
-      const tc = now - s.film.lastCut;
-      if (tc < JUMP_CUT.out) {
-        cutting = true; // fading out: hold the picture
-        cutAlpha = 1 - tc / JUMP_CUT.out;
-      } else if (tc < JUMP_CUT.out + JUMP_CUT.in) {
-        cutting = true; // snapped: fade back in on the target
-        s.film.shown = Fstar;
-        cutAlpha = (tc - JUMP_CUT.out) / JUMP_CUT.in;
-      } else {
+      if (cutPhase === CUT_OUT) {
+        const tc = now - s.film.lastCut;
+        if (tc < JUMP_CUT.out) {
+          cutting = true; // fading out: hold the picture
+          cutAlpha = 1 - tc / JUMP_CUT.out;
+        } else {
+          // Snap on this frame, however late it is.
+          s.film.shown = Fstar;
+          snapFx(s);
+          cutPhase = CUT_IN;
+          const late = tc - JUMP_CUT.out;
+          cutInAt = late > JUMP_CUT.in / 2 ? now : s.film.lastCut + JUMP_CUT.out;
+        }
+      }
+      if (cutPhase === CUT_IN) {
+        const ti = now - cutInAt;
+        if (ti < JUMP_CUT.in) {
+          cutting = true; // snapped: fade back in on the target
+          s.film.shown = Fstar;
+          cutAlpha = ti / JUMP_CUT.in;
+        } else {
+          cutPhase = CUT_NONE;
+        }
+      }
+      if (!cutting) {
         const h = s.flags.rewinding ? FILM_HALF_LIFE.rewind : FILM_HALF_LIFE.normal;
         s.film.shown += (Fstar - s.film.shown) * (1 - Math.pow(2, -dt / h));
       }
@@ -458,6 +519,11 @@ export function tick(s: FieldStore, dtIn: number, now: number): FieldFrame {
   // Anchors follow their stages; safe rects likewise (§9.6).
   anchorTransform(f.a, s, f.offA, f.disperse);
   anchorTransform(f.b, s, f.offB, f.disperse);
+  if (!routePair && !posters) {
+    // Shapes ride the viewport edge while they morph (anchors.ts hangInView).
+    hangInView(f.a, s, f.offA);
+    hangInView(f.b, s, f.offB);
+  }
   activeSafeRects(s, f.safe);
 
   // Pointer (§3.7): fine pointers under full motion only.

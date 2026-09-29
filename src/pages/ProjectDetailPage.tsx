@@ -1,11 +1,12 @@
 import { useEffect, useRef } from 'react';
-import { Link, useNavigationType, useParams } from 'react-router-dom';
+import { Link, useNavigate, useNavigationType, useParams } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import Chip from '../components/Chip';
 import EmblemOutline from '../components/EmblemOutline';
 import LinkLabel from '../components/LinkLabel';
 import { getNextProject, getProject, type Project } from '../content/projects';
 import { detail } from '../content/site';
+import { useDetailChoreo } from '../chapters/projects/detail';
 import { StateId } from '../field/states/ids';
 import { enterRoute } from '../scroll/director';
 import { store } from '../scroll/store';
@@ -15,13 +16,18 @@ const TITLE_ID = 'project-title';
 /**
  * /work/:slug (SPEC §6 "Project detail"), code-split.
  *
- * Field (later phase): route mode with the pair locked to the project's
- * emblem, anchored at (74vw, 40vh) × .8 on desktop and (50vw, 22svh) × .7 on
- * mobile — the desktop copy keeps to the left 46vw and the mobile copy starts
- * below a project field slot, so text and emblem never overlap. Hooks:
- * [data-emblem] on the article, [data-detail-figure] for the clip-path reveal,
- * [data-detail-stage] for the MCP App re-stage, [data-next-emblem] for the
- * Next project peek.
+ * Field: director route mode with the pair locked to { this emblem, the next
+ * project's emblem }, anchored at (74vw, 40svh) × .8 on desktop and (50vw,
+ * 22svh) × .7 on mobile — the desktop copy keeps to the left 46vw and the
+ * mobile copy starts below a project field slot, so text and emblem never
+ * overlap. As the page scrolls the emblem rises and dims; MCP App's
+ * constellation re-stages over its spacer (scroll/detailField.ts).
+ *
+ * Motion (chapters/projects/detail.ts): the home → detail hand-off and the
+ * entry reveal ([data-d-line] line masks, [data-d-up] fade-ups at 350 ms)
+ * after an in-app transition, the figure's clip reveal
+ * ([data-detail-figure]), MCP App's spacer ([data-detail-stage]) and the
+ * "Next project" peek / commit (a[data-next-link]).
  */
 export default function ProjectDetailPage() {
   const { slug } = useParams();
@@ -47,9 +53,12 @@ export default function ProjectDetailPage() {
 }
 
 function ProjectDetail({ project }: { project: Project }) {
+  const rootRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const navType = useNavigationType();
+  const navigate = useNavigate();
   const next = getNextProject(project.slug);
+  useDetailChoreo(rootRef, project, navigate);
 
   // In-app navigation lands focus on the title (tabIndex -1), so keyboard and
   // screen reader users start at the top of the new page. Not on POP (first
@@ -59,7 +68,7 @@ function ProjectDetail({ project }: { project: Project }) {
   }, [navType]);
 
   return (
-    <>
+    <div ref={rootRef}>
       <article
         aria-labelledby={TITLE_ID}
         data-project={project.slug}
@@ -81,23 +90,29 @@ function ProjectDetail({ project }: { project: Project }) {
           <div data-safe className="desktop:max-w-[46vw]">
             <Link
               to={detail.back.href}
+              data-d-up
               className="link-line t-label gap-[0.6em] text-ink-2 hover:text-ink focus-visible:text-ink"
             >
               <LinkLabel cta={detail.back} />
             </Link>
 
-            <p className="t-label mt-[8svh] text-ember mobile:mt-10">{project.indexLabel}</p>
+            <p data-d-line className="t-label mt-[8svh] text-ember mobile:mt-10">
+              {project.indexLabel}
+            </p>
             <h1
               ref={titleRef}
               id={TITLE_ID}
               tabIndex={-1}
+              data-d-line
               className="t-display-xl mt-4 text-balance text-ink"
             >
               {project.title}
             </h1>
-            <p className="t-lede mt-8 max-w-[36ch] text-ink-2">{project.description}</p>
+            <p data-d-up className="t-lede mt-8 max-w-[36ch] text-ink-2">
+              {project.description}
+            </p>
 
-            <ul className="mt-8 flex flex-wrap gap-2">
+            <ul data-d-up className="mt-8 flex flex-wrap gap-2">
               {project.tags.map((tag) => (
                 <Chip key={tag} as="li">
                   {tag}
@@ -105,7 +120,7 @@ function ProjectDetail({ project }: { project: Project }) {
               ))}
             </ul>
 
-            <div className="mt-10 flex flex-wrap gap-3 mobile:flex-col">
+            <div data-d-up className="mt-10 flex flex-wrap gap-3 mobile:flex-col">
               {project.liveUrl && (
                 <a
                   href={project.liveUrl}
@@ -192,6 +207,7 @@ function ProjectDetail({ project }: { project: Project }) {
           <Link
             to={`/work/${next.slug}`}
             data-cursor="open"
+            data-next-link
             data-next-emblem={next.emblem}
             className="mt-5 flex items-center justify-between gap-6 text-ink transition-colors duration-240 ease-ui after:absolute after:inset-0 hover:text-ember focus-visible:text-ember"
           >
@@ -200,7 +216,7 @@ function ProjectDetail({ project }: { project: Project }) {
           </Link>
         </div>
       </nav>
-    </>
+    </div>
   );
 }
 

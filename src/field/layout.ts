@@ -195,9 +195,15 @@ export const CARD = {
   emblemFill: 0.9,
 } as const;
 
-/** Card width: min(44vw, 88.1svh) on desktop; full content width inline on mobile. */
+/**
+ * Card width: min(44vw, 88.1svh) on desktop (§5 C3); full content width
+ * inline on mobile. Tuned (CONTRACTS.md): also ≤ (50svh − 128px) × 2 × 1200/953,
+ * so the card's top (50svh − h/2) stays ≥ 128px, below the C3 chrome
+ * ("Side projects" / "01 / 04" at max(104px, 11svh)). Binds only on short
+ * wide windows (below ≈ 830px tall with 44vw binding, e.g. 1280 × 640).
+ */
 export const CARD_W: Readonly<Record<LayoutMode, RefLen>> = {
-  desktop: ref('--card-w', min(vw(44), svh(88.1))),
+  desktop: ref('--card-w', min(vw(44), svh(88.1), mul(sub(svh(50), px(128)), 2400 / 953))),
   mobile: ref('--card-w', CONTENT_W),
 };
 const cardH = (mode: LayoutMode): Len => div(mul(CARD_W[mode], CARD.imgH), CARD.imgW);

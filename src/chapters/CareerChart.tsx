@@ -32,9 +32,11 @@ import { CHART } from '../field/layout';
  * fallback bars (quarter-year slabs of dots, the "+" fizz, gridlines,
  * divider, the AI point) shown only while the field is not live; the axis /
  * baseline / ticks SVG (always; pathLength 1 for stroke-dashoffset draws);
- * tick labels, "Years", the legend; the numerals ([data-numeral] with
- * data-count / data-suffix for the lockstep count-up; final values for now);
- * the ember leader ([data-leader], origin-top for a scaleY draw).
+ * tick labels, "Years" ([data-axis-title]), the legend ([data-legend]); the
+ * numerals ([data-numeral], final values in the markup); the ember leader
+ * ([data-leader], origin-top for its scaleY draw). The choreography — axis
+ * draw, tick fade, lockstep count-up, AI ignition, stat hover → S2 focus
+ * groups — is choreo/chart.ts, built from About's reveal callback.
  *
  * While the field is not live, hovering a stat dims the fallback groups it
  * does not light and steps the other numerals down to ink-2 (colour only),
@@ -45,7 +47,7 @@ import { CHART } from '../field/layout';
  * Put on the About stage: the gap between the baseline and the stat row
  * (read by the leader in the figure and by the stat row beside it).
  */
-export const CHART_STAGE_VARS = '[--label-gap:24px] max-[1200px]:[--label-gap:14px]';
+export const CHART_STAGE_VARS = '[--label-gap:24px] max-[1200px]:[--label-gap:14px] low:[--label-gap:14px]';
 
 type Swatch = 'steel' | 'signal';
 
@@ -95,11 +97,22 @@ const BARS: readonly Bar[] = CHART.bars.map((b): Bar => {
   return { key: b.stat, x0, w: b.w, years: b.years, segments: [{ from: 0, to: b.years, group: b.groups[0] }] };
 });
 
-/** Numerals: left-aligned with their bar (or the AI leader), 2svh above the data. */
+/**
+ * Numerals: left-aligned with their bar (or the AI leader), 2svh above the
+ * data. A bar numeral rides its bar's grain front while the Pour fills it
+ * (choreo/chart.ts writes `--fill`, the filled fraction; 1 when unset):
+ * translated down by the unfilled part of the bar, `(1 − fill) × bar height`.
+ */
 const NUMERALS = [
-  ...BARS.map((b) => ({ stat: STAT[b.key], x: b.x0, top: yf(b.years), lift: '0px' })),
+  ...BARS.map((b) => ({
+    stat: STAT[b.key],
+    x: b.x0,
+    top: yf(b.years),
+    lift: '0px',
+    ride: `0 calc((1 - var(--fill, 1)) * ${+yf(b.years).toFixed(5)} * var(--anchor-chart-h))`,
+  })),
   // The AI point's reticle is ~12px in radius; keep the numeral clear of it.
-  { stat: STAT.ai, x: CHART.ai.xc, top: CHART.ai.y, lift: '12px' },
+  { stat: STAT.ai, x: CHART.ai.xc, top: CHART.ai.y, lift: '12px', ride: undefined },
 ];
 
 /**
@@ -153,6 +166,7 @@ function Legend() {
   return (
     <ul
       aria-hidden="true"
+      data-legend
       className="absolute top-[calc(100%+18px)] left-0 flex gap-x-5 gap-y-2 desktop:top-3 desktop:left-4 desktop:flex-col"
     >
       {chart.legend.map((item) => (
@@ -332,7 +346,7 @@ export default function CareerChart({ className = '' }: { className?: string }) 
         <FallbackBars uid={uid} />
         <Axis />
 
-        <span id={yearsId} className="t-label absolute bottom-[calc(100%+16px)] left-0 text-ink-2">
+        <span id={yearsId} data-axis-title className="t-label absolute bottom-[calc(100%+16px)] left-0 text-ink-2">
           {chart.axisTitle}
         </span>
         {CHART.ticks.map((t, i) => (
@@ -347,15 +361,16 @@ export default function CareerChart({ className = '' }: { className?: string }) 
         ))}
         <Legend />
 
-        {/* Numerals: final values for now; the count-up (§5 C1) drives them later.
+        {/* Numerals: final values in the markup (no JS, reduced motion, no
+            field); choreo/chart.ts counts them in lockstep with the Pour.
             Glyph baseline 2svh above the data (box bottom sits .09em below it). */}
-        {NUMERALS.map(({ stat, x, top, lift }) => (
+        {NUMERALS.map(({ stat, x, top, lift, ride }) => (
           <span
             key={stat.key}
             data-numeral={stat.key}
             data-count={stat.count}
             data-suffix={stat.suffix}
-            style={{ left: pct(x), bottom: `calc(${pct(top)} + 2svh + ${lift} - 0.09em)` }}
+            style={{ left: pct(x), bottom: `calc(${pct(top)} + 2svh + ${lift} - 0.09em)`, translate: ride }}
             className={`t-stat absolute whitespace-nowrap text-ink transition-colors duration-500 ease-ui desktop:text-[length:min(clamp(3.5rem,2rem+6vw,7.5rem),13svh)] ${NUMERAL_DIM[stat.key]}`}
           >
             {stat.value}
@@ -408,6 +423,7 @@ export function CareerStats({ className = '' }: { className?: string }) {
       aria-hidden="true"
       data-safe
       data-fit
+      data-stats
       style={LABEL_ROW}
       className={`flex flex-col before:-top-2 desktop:absolute desktop:top-[calc(var(--anchor-chart-baseline)+var(--label-gap))] desktop:left-[var(--anchor-chart-x)] desktop:w-[min(calc(var(--anchor-chart-w)+5vw),calc(100vw-var(--anchor-chart-x)-var(--gutter)))] desktop:min-[1000px]:grid desktop:min-[1000px]:grid-cols-(--label-cols) desktop:min-[1000px]:grid-rows-[auto_auto] desktop:min-[1000px]:gap-y-2 desktop:min-[1000px]:pl-(--label-pad) ${className}`}
     >
@@ -427,7 +443,7 @@ export function CareerStats({ className = '' }: { className?: string }) {
             {bindShortWords(stat.label)}
           </span>
           <span
-            className={`t-body col-start-2 mt-1.5 text-[14px] leading-[1.45] text-pretty text-ink-2 transition-colors duration-240 ease-ui group-hover:text-ink desktop:min-[1000px]:col-start-1 desktop:min-[1000px]:mt-0`}
+            className={`t-body col-start-2 mt-1.5 text-[14px] leading-[1.45] text-pretty text-ink-2 transition-colors duration-240 ease-ui group-hover:text-ink desktop:min-[1000px]:col-start-1 desktop:min-[1000px]:mt-0 desktop:low:text-[13px] desktop:low:leading-[1.35]`}
           >
             {stat.note}
           </span>

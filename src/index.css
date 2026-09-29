@@ -13,6 +13,10 @@
      mobile:   width < 768, or width < 1024 in portrait (not short landscape)
      desktop:  everything else (includes short landscape phones)
      short:    height < 600 (mobile slots shrink)
+     low:      height ≤ 760 — the short-laptop tier: real browser viewports
+               of 1366×768 / 1536×864 (125%) / 1280×800 screens are 640–730px
+               tall; the stuck About and Capabilities stages tighten so their
+               [data-fit] content fits 100svh down to 640px (the fit guard)
      fine:     pointer: fine                                                  */
 @custom-variant mobile {
   @media (max-width: 1023.98px) and (orientation: portrait), (max-width: 767.98px) and (min-height: 500px) {
@@ -26,6 +30,11 @@
 }
 @custom-variant short {
   @media (max-height: 599.98px) {
+    @slot;
+  }
+}
+@custom-variant low {
+  @media (max-height: 760px) {
     @slot;
   }
 }
@@ -157,7 +166,7 @@
     --gutter: clamp(20px, 4vw, 64px);
     --col-gap: clamp(12px, 1.6vw, 28px);
     --name-fs: min(13.2vw, 30svh);
-    --card-w: min(44vw, 88.1svh);
+    --card-w: min(44vw, 88.1svh, (50svh - 128px) * 2.5184);
     --card-h: calc(var(--card-w) * 953 / 1200);
     --slot-about: 52svh;
     --slot-work: 44svh;
@@ -664,6 +673,10 @@
     z-index: -1;
     pointer-events: none;
     background-color: rgb(5 5 7 / 0.82);
+    /* --scrim: a block's text reveal can scrub its scrim in with it (the C3
+       panels, chapters/projects/stage.ts), so no empty dark box shows before
+       the text does. */
+    opacity: var(--scrim, 1);
     transition: opacity 300ms var(--ease-ui);
     -webkit-mask-image:
       linear-gradient(to right, var(--scrim-in), var(--scrim-out)),
@@ -677,6 +690,10 @@
   html:not([data-field]) [data-safe]::before,
   html:not([data-field]) .scrim::before {
     opacity: 0;
+  }
+  /* Scrubbed scrims follow the scroll directly (no 300ms lag behind their text). */
+  [data-p-exit][data-safe]::before {
+    transition: none;
   }
 
   /* ── Chips, buttons, links ─────────────────────────────────────────────── */

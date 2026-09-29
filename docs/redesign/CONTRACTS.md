@@ -37,7 +37,7 @@ These are the shared modules that the **scroll** agent (SPEC §12 step 3) and th
 | `Ripple` | type | `[x px, y px, t0 s, amp]` |
 | `EnteringParams` | interface | `{ stagger, turb, path: PathId }` |
 | `Vec3`, `Vec4` | type | Mutable number tuples |
-| `SafeRectBuffer` | interface | `{ rects: Float32Array(24), count }` in viewport px. Maps to `uSafe[6]` and `uSafeCount`. |
+| `SafeRectBuffer` | interface | `{ rects: Float32Array(24), weights: Float32Array(6), count }` in viewport px. Maps to `uSafe[6]`, `uSafeW[6]` (per-rect mask strength, 1 = the full §2.3 mask) and `uSafeCount`. |
 | `FieldFrame` | interface | Everything the engine needs per frame. See the file for field docs. |
 
 Type-level additions to §9.2 (the runtime shape is unchanged):
@@ -58,7 +58,7 @@ Type-level additions to §9.2 (the runtime shape is unchanged):
 | `edgeY(edge, s)` | `→ number \| null` |
 | `resolve(s)` | `→ ResolvedSegments`. Writes `s.segments`. Call it after every refresh. Segments stay ordered and never overlap. If a chapter is missing, only the segments before it are resolved. |
 
-### `src/scroll/anchors.ts`: owner scroll; status real (the MCP App detail re-stage is `TODO(phase6-scroll)`)
+### `src/scroll/anchors.ts`: owner scroll; status real
 
 | Symbol | Signature |
 |---|---|
@@ -68,10 +68,13 @@ Type-level additions to §9.2 (the runtime shape is unchanged):
 | `registerChapterRects(id, stageEl, s = store)` | `→ void`. **Refresh only.** Measures `[data-field-anchor]` and `[data-safe]`. |
 | `clearChapterRects(id, s = store)` | `→ void`. Call it on unmount or route change. |
 | `anchorCenter(id, s, out)` | `→ [x, y]` in viewport px. An unmeasured state falls back to its `layout.ts` box, treated as viewport-framed. |
-| `anchorTransform(id, s, out: Vec4, disperse?)` | `→ [x px, y px, scale, alpha]`. Applies the S9 sink and the S4–S7 curtain; in route mode, the detail-page anchor with its scroll parallax and dimming. |
+| `anchorTransform(id, s, out: Vec4, disperse?)` | `→ [x px, y px, scale, alpha]`. Applies the S9 sink and the S4–S7 curtain; on a detail route S4–S7 go through `scroll/detailField.ts` `detailAnchorTransform` (detail anchor, scroll parallax and dimming, the MCP App re-stage over its spacer, the 700 ms home → detail hand-off, the "Next project" commit back to rest, reduced-motion registration to the header). |
+| `hangInView(id, s, out)` | Home film, desktop only: clamps an endpoint's anchor centre into [nav band + h/2, 100svh − h/2] so a shape whose chapter has scrolled away rides the viewport edge while it morphs. Never S0, S2 (DOM axis registration), S10, or S9 during the sink. The director applies it to both endpoints outside route mode and posters. See Tuning notes. |
+| `registerPageRects(root)` / `clearPageRects()` | Routes without chapters (detail pages, 404): their `[data-safe]` blocks in document px, `chapter: 'page'`. `activeSafeRects` reads page rects only off the home route and chapter rects only on it. |
 | `svhPx()` | `→ number`, 100svh in px (measured once per refresh; browser only) |
 | `createSafeRectBuffer()` | `→ SafeRectBuffer` |
-| `activeSafeRects(s, out?)` | `→ SafeRectBuffer`. The nav band, then the 5 on-screen blocks nearest the centre. In the stuck C3 stage, only the active panel's blocks count. |
+| `activeSafeRects(s, out?)` | `→ SafeRectBuffer`. The nav band, then the 5 on-screen blocks nearest the centre. In the stuck C3 stage, only the active panel's blocks count; the active panel switches at the hand-over, `floor(4p − PROJECT_SWITCH_Q)`, so the exiting text stays masked over q 0–.12. Those blocks carry a weight that follows their text (`PROJECT_TEXT_Q`: in over the reveal, out over the exit; a block at weight 0 is dropped); every other rect weighs 1. |
+| `BEACON_SINK`, `beaconSinkEase(sink)` | The S9 sink's tuning (see Tuning notes) and its travel / scale progress |
 
 ### `src/scroll/director.ts`: owner scroll; status real
 
@@ -85,7 +88,7 @@ Type-level additions to §9.2 (the runtime shape is unchanged):
 | `signalToNoise(aperture, turb)` | `→ number`, the §6 HUD formula |
 | `hudSignal(frame)` | `→ number`. Rest reads 0.03 and every hold reads 1.00. |
 | `setFilmCeiling(k)` | `→ void`. **The engine calls this** each time S0…Sk are all resident (§9.9). |
-| `snapFilm(s)` | `→ void`. Sets displayed F to target now: the nav jump-cut step 3, and the resync after returning from a detail page. |
+| `snapFilm(s)` | `→ void`. Sets displayed F to target now — and the frame's damped fx (disperse, charge, groupW, focusOn) to their targets: the nav jump-cut step 3, and the resync after returning from a detail page (so it never re-grows a curtain halo). |
 | `createFieldFrame()` | `→ FieldFrame` |
 | `frame` | `Readonly<FieldFrame>`, the last frame produced. HUD and debug read it at ≤ 10 Hz. |
 | `tick(s, dt, now)` | `→ FieldFrame`. The engine's `renderFrame` calls it once per tick. |
@@ -97,11 +100,11 @@ Type-level additions to §9.2 (the runtime shape is unchanged):
 
 What `tick` does, by override:
 
-- **No override:** F* = `filmTarget(scrollY)`, then the jump cut (the director folds its fade into `frame.opacity` and never writes `fx.opacity`), then the 120 ms damp (60 ms while rewinding).
+- **No override:** F* = `filmTarget(scrollY)`, then the jump cut (the director folds its fade into `frame.opacity` and never writes `fx.opacity`), then the 120 ms damp (60 ms while rewinding). The cut is a state machine (out → in): it snaps F (and the damped fx) on the first frame at or past the fade-out however late it lands, restarts the fade-in if that frame is more than half a fade-in late, and never re-arms its detector before the fade-in ends — one cut can never become several.
 - **Override with `b = a + 1` on the home route:** F* = a + m, as used by the intro.
 - **Override with `snap`:** no damp and no cut. Used by `?film=` and resyncs.
 - **Any other override, or a route other than home:** route mode. The frame shows (a, b) directly, with `seg = −1`.
-- **Reduced motion (`store.mode === 'reduced'`, no override):** posters. (a, b, mix) is a **crossfade**, not a morph: the engine draws A alone at α·(1 − mix), then B alone at α·mix (two passes, each state on both sides of the pair at mix 0, with its resting aperture). `seg = −1`, S = T = 0, path DEFAULT; `settled` is false only while a 400 ms fade runs, so the engine keeps rendering until it is true. There are no lock edges: the engine shows S1 printed (`fx.printed = 1`) without the beam. The poster never passes the film ceiling (until S2–S9 exist it is S1).
+- **Reduced motion (`store.mode === 'reduced'`, no override):** posters. (a, b, mix) is a **crossfade**, not a morph: the engine draws A alone at α·(1 − mix), then B alone at α·mix (two passes, each state on both sides of the pair at mix 0, with its resting aperture). `seg = −1`, S = T = 0, path DEFAULT; `settled` is false only while a 400 ms fade runs, so the engine keeps rendering until it is true. The fx (groupW, focusOn, charge, disperse) are copied undamped — §8.2 wants no animation, and a damped value would freeze part-way once the on-demand loop stops. There are no lock edges: the engine shows S1 printed (`fx.printed = 1`) without the beam. The poster never passes the film ceiling (until S2–S9 exist it is S1).
 
 ### `src/field/uniforms.ts`: owner engine; shared data, no `three`
 
@@ -118,7 +121,7 @@ What `tick` does, by override:
 | `POSTER_TIME` | Per state, the `live()` clock frozen under reduced motion (§3.10 poster frames); 0 until each generator phase sets its key frame |
 | `SCAN_OFF` | −1e4 su: `fx.scanX` when no beam runs |
 
-Adding a state takes three things: a generator in `states/sNN-*.ts`, a `live()` case in the shader, and one `STATE_PARAMS` row.
+Adding a state takes four things: a generator in `states/sNN-*.ts`, its live function in `shaders/live/sNN.glsl` (spliced automatically), a `case` in `live.glsl`, and one `STATE_PARAMS` row (plus its `POSTER_TIME` when its poster frame is not t = 0).
 
 ### `src/field/tiers.ts`: owner engine; status real (table, rule, warm-up probe, adaptive governor)
 
@@ -149,7 +152,7 @@ Adding a state takes three things: a generator in `states/sNN-*.ts`, a `live()` 
 
 `FieldCanvas` (field/FieldCanvas.tsx) is the only mount: `#field-root` with one aria-hidden `<canvas style="opacity:0">` (identical on the server). It acquires in an idle callback (≤ 800 ms), releases on unmount, forwards the motion preference to `setMode`, subscribes `invalidate()` to every scroll write (`subscribeScroll`), samples the HUD once the field is ready, and sets `store.mode = 'css'` when no renderer starts (kind `'none'`: the CSS glow on `body::before` stays the backdrop). Under `forced-colors: active` it never boots the field (and releases a running one when the mode turns on; it boots again when it turns off); index.css unmasks the `<h1>` and hides the canvas, the atmosphere, the scrims and the scroll cue there.
 
-Engine boot details: it bootstraps `store.scroll.W / H` only if they are still 0, and sets the `?film` override only if the scroll side has not (same value). Worker jobs carry `GenerateRequest.supersede` (default true: a new job drops the queue; lazy single-state jobs pass false and queue behind it).
+Engine boot details: it bootstraps `store.scroll.W / H` only if they are still 0, and sets the `?film` override only if the scroll side has not (same value). Worker jobs carry `GenerateRequest.supersede` (default true: a new job drops the queue; lazy single-state jobs pass false and queue behind it). The boot order is route-aware: a direct hit on the 404 boots `[S0, S10]` and defers S2–S9 until the route leaves the 404 (then one `supersede: false` job). Each state's textures are uploaded (`renderer.initTexture`) when it arrives, never on the first frame that draws it (§9.9).
 
 Engine runtime details:
 
@@ -253,7 +256,9 @@ Wiring (§9.5): `gsap.ticker.add(lenisRaf, false, true)`, `lagSmoothing(0)`; the
 
 ### `src/motion/reveal.ts`, `src/scroll/useChapter.ts`, `src/components/Chapter.tsx`: owner scroll
 
-- `lineMask(el, opts)` and `fadeUp(els, opts)`, scrubbed or timed; both return a `Reveal` (`complete()`, `revert()`) or `null` under reduced motion. `reveal.ts` registers SplitText and is its own lazy chunk: never import it statically from initial-bundle code; chapters get the helpers from their context.
+- `lineMask(el, opts)` and `fadeUp(els, opts)`, scrubbed or timed; both return a `Reveal` (`complete()`, `revert()`) or `null` under reduced motion. `reveal.ts` registers SplitText and is its own lazy chunk: never import it statically from initial-bundle code; chapters get the helpers from their context. `lineMask` splits with `aria: 'auto'` only on elements whose role takes a name (headings, links, buttons: `splitAria`); a `<p>` keeps `aria: 'none'`, so its line runs stay in the AX tree (ARIA prohibits naming a paragraph, and screen readers skip such a label).
+- `Reveal.revert()` is idempotent and ends with a clear of every inline property the reveal wrote. useChapter's teardown runs the `reveal` cleanup, reverts the chapter's context, THEN calls `revert()` on every tracked reveal: a context revert alone can leave a from-state behind (a staggered `fromTo` built or refreshed past its window reverts to opacity 0 / y 16px in gsap 3.14; hand-written styles such as `maskOneLine`'s are re-rendered at p = 0). Track every reveal that writes inline styles; `choreo/reveal.ts` `asReveal(anim, clear)` takes the clear.
+- `motion/prime.ts` `prime(anim)`: renders a scroll-driven animation to its end and back at build time, so gsap initialises its tweens (CSSPlugin computed-style and transform reads, recorded start states) then — not in the scroll frame that first reaches them (§8.5) — and inside the context being built. Every scrubbed reveal, the chart axis and ticks, the CTA disc and the C3 stage timeline are primed.
 - `useChapter(id, sectionRef, stageRef, { onProgress, reveal })`, `ChapterContext` (`gsap`, `ScrollTrigger`, `lineMask`, `fadeUp`, `window(el, from, to)`, `track()`, `isSticky()`), `REVEAL_WINDOWS`. `<Chapter>` forwards `onProgress` and `reveal`; the fit guard requests a refresh when it flips.
 - useChapter builds, once the runtime has loaded, **one `gsap.context` scoped to the section**, rebuilt (reverted) when reduced motion or the layout changes and on unmount — the §9.10 `useGSAP({ scope, dependencies })` rule without `@gsap/react`, which would pull gsap into the initial bundle. It loads the reveal chunk only when the chapter has `[data-reveal]` elements or a `reveal` callback (full motion); otherwise `ctx.lineMask` / `ctx.fadeUp` return null.
 - Declarative reveals: `data-reveal="lines" | "up"`, optional `data-reveal-window="from,to"` (viewport %) and `data-reveal-timed`. Focus-in (§8.1) completes a chapter's reveals and glides to its hold (C3: the focused panel's window hold). **Never line-mask `ChapterHeading`**: SplitText's `aria: 'auto'` would put the hidden "01 — " into the accessible name.
@@ -261,7 +266,18 @@ Wiring (§9.5): `gsap.ticker.add(lenisRaf, false, true)`, `lagSmoothing(0)`; the
 
 ### `src/scroll/jump.ts`, `src/scroll/chapters.ts`: owner scroll
 
-`chapterTarget`, `jumpTargets`, `activeJumpIndex`, `jumpKind`, `jumpToY(y, onArrive?)`, `jumpToChapter(id)` (§4.4 policy: ≤ 2 film states glide, else cut; the policy compares the film positions derived from the current and target scroll, not the displayed F), `focusQuietly`, `isQuietFocus`, `focusChapterHeading`, `JUMP_ORDER`, `GLIDE_MAX_STATES`, `onJumpLinkClick`. `chapters.ts` adds `CHAPTER_STATE` (each chapter's reduced-motion poster) and `PROJECT_HOLD_Q` (.56).
+`chapterTarget`, `jumpTargets`, `activeJumpIndex`, `jumpKind`, `jumpToY(y, onArrive?)`, `jumpToChapter(id)` (§4.4 policy: ≤ 2 film states glide, else cut; the policy compares the film positions derived from the current and target scroll, not the displayed F), `focusQuietly`, `isQuietFocus`, `focusChapterHeading`, `JUMP_ORDER`, `GLIDE_MAX_STATES`, `onJumpLinkClick`. `chapters.ts` adds `CHAPTER_STATE` (each chapter's reduced-motion poster), `PROJECT_HOLD_Q` (.56) and `PROJECT_SWITCH_Q` (.13: the C3 hand-over, shared by `chapters/projects/stage.ts` and `activeSafeRects`).
+
+### `src/scroll/detailField.ts`: owner scroll (phase 3); status real
+
+Pure and allocation-free (render loop). `detailAnchorTransform(id, s, out)`, `DETAIL_FIELD` (parallax .15·H, dim to α .25, hand-off .7 s, MCP stage window), `handoff` (`{x, y, scale, alpha, t}`: captured by `chapters/projects/route.ts`, tweened by `chapters/projects/detail.ts`), `detailFx` (`restore` for the "Next project" commit, the MCP spacer's `stageTop` / `stageH`, measured on refresh).
+
+### Phase 3 chapter helpers (`src/chapters/choreo/`, `src/chapters/projects/`)
+
+- **Focus and charge are arbitrated.** `fx.groupW` and `fx.focusOn` are written only through `chapters/choreo/fx.ts` `claimFocus(owner, lit, dim, { focusOn })` / `releaseFocus(owner)`: the newest live claim wins, and with no claim every group is 1 and `focusOn` 0. Any new focus writer (a project-title hover, say) claims through it, or leaves groups 0–4 alone (S1, S2, S4, S7 and S8 all use low group ids). `fx.charge` likewise goes through `setCharge(owner, on, level)` (only the owner that set it clears it). One-shots: `fireNova`, `fireIgnition` (C5 writes `fx.exposure` for the ignition), `settleOneShots`.
+- `film.ts`: `watchFilm(gsap, fn)` (one shared ticker listener, kept after the engine's `renderFrame`, full motion only), `fieldDraws(state)` / `onFieldStates(fn)` (a MutationObserver cache of `html[data-field-states]`), `posterF()`, `invalidateField()`.
+- `chart.ts` (C1), `contact.ts` (C5 reveals, ignition, sink), `horizon.ts` (footer sunset), `reveal.ts` (`maskOneLine`); `projects/stage.ts` (the C3 4-window stage), `projects/route.ts` (home ↔ detail transitions), `projects/detail.ts` (detail page field + figure).
+- The C3 stage lives in its own gsap context, built outside the chapter's (`context.ignore`), reverted once by stage.ts, and cleared after its revert (and once more as a tracked reveal after the chapter context). `PROJECT_TEXT_Q` (scroll/chapters.ts) holds the panel text windows shared by the stage, the `--scrim` scrub and `activeSafeRects`.
 
 The App's `ScrollToHash` routes every route-change scroll through these: no hash → `scrollInstant(0)` (not on POP); a jump id → `jumpToChapter`; any other hash → `jumpToY(top, () => focusQuietly(heading))`.
 
@@ -310,3 +326,53 @@ Phase 2 review fixes (tuned on the same setup, measured with the canvas-only lum
 | shader mask feather, `[data-safe]::before` feather | smootherstep over 24px (shader) and 48px (scrim, 8 eased stops) | linear 24px / 48px | Linear ramps start and stop abruptly (Mach bands): the scrimmed blocks read as hard dark boxes. Kept at the specced widths: the hero eyebrow sits 20–50px above the name's cap line, so a wider ramp dims the particle name's top. |
 | shader loupe (`LOUPE_CORE`) | `loupe = amt · (1 − smoothstep(.35r, r, d))`; z → `uFocusZ` by .95·loupe; CoC → 1 by loupe; brightness +30% by loupe | z → 0 by .85·(1 − d/r)² | The quadratic pull only focused ~5–11 px around the pointer, under the 24 px ring: the loupe was invisible. Now the inner 35% of r (≈ 38 px at 900 px tall) is fully sharp with a soft edge. |
 | `live.glsl` scan beam | ramp + .5 within the beam (bone → ember → p-core) as well as brightness ×2.8 | brightness only | §10 "an ember scan beam", §2.1 p-core "scan flash": the brightness-only beam read as a white band on the grains. |
+
+Phase 3 integration (tuned on the same setup: 1440×900 High/Mid, 1920×1080, 1280×720, 1280×640, 390×844 Low; pinned `?film=` sweeps plus natural scroll, reduced motion and no WebGL):
+
+| Where | Value | Spec | Why |
+|---|---|---|---|
+| `material.ts` / `live.glsl` | every `shaders/live/sNN.glsl` spliced at `// @include states` (sorted `import.meta.glob`), one `case` per state | — | Adding a state's live() = drop its file in `shaders/live/` + its case |
+| `anchors.ts` `hangInView` (director, home film, desktop) | a morphing endpoint's anchor centre is clamped into [nav band + h/2, 100svh − h/2]; not S0, S2, S10, nor S9 while sinking | anchors follow their stage | Every cross-chapter segment (the Pour's second half, S3 → S4, S7 → S8, the spiral) morphed between two off-screen shapes: at mid-segment the frame was empty void. Now the outgoing shape rides the top edge and the incoming one rises from the bottom edge, so each transition reads. Holds are unaffected (a box in view is never moved). Mobile keeps strict registration (phase 4). |
+| `field.vert.glsl` `P_TOPPLE` | bars and fizz (groups 0–3) tip RIGIDLY about their bottom-right pivot, θ = −1.4·r², r = tl / .5 (gravity), then glide to the slab, cubic over tl .4 → 1; everything else morphs directly | quadratic Bézier via pivot + R(−60°)(pa − pivot) | The Bézier smeared each bar toward its slab and never read as a fall. On the linear clock `tl` so the whole bar falls together. |
+| `s03-redacted.ts` `KEY.barRand` | .015 | (agent: .06) | With the rigid fall, a wider key spread fanned each falling bar into a cloud |
+| `uniforms.ts` S3 `enter.turb` | .015 | .06 | Curl noise at .06 scattered each bar mid-fall (agent request) |
+| `chapters/choreo/chart.ts` topple fades | numeral k fades (CSS `filter: opacity`) over tl 0 → .3 of its own bar's topple, tl = (m − key·.45) / .55 with the S3 keys (bars 0 / .45 / .9, the AI "1" and leader .15) | — | The numerals stayed at full ink over bars that had already fallen |
+| `Capabilities.tsx` `FOCUS_GATE` | [7.9, 8.04] | [7.9, 8.6] (agent) | The spiral started from one lit drawer and three dimmed plates; now all four plates carry their light into it |
+| `live/s08.glsl` | `STACK_ACTIVE_GAIN` .8, `STACK_REST_DIM` .1 | agent .5 / .3 | At .3 the three resting plates all but vanished (α ×.35 ×.7, +1.2 CoC); the stack must read as four layers with one drawer out |
+| `uniforms.ts` S8 density | .7 | .5 | The isometric plates are hairlines; at .5 the stack read too faint next to S7 / S9 |
+| `projects/stage.ts` flow panels (reduced motion, fit-guard flow) | `fx.disperse` 1 on desktop, 0 on mobile | 0 | In flow every card is open on its emblem's anchor: at 0 the opaque card hid S4–S6 entirely; the post-curtain halo is the chapter's final state (§8.2) |
+| `layout.ts` `CARD_W` desktop | `min(44vw, 88.1svh, (50svh − 128px) × 2 × 1200/953)` | `min(44vw, 88.1svh)` | On short wide windows (e.g. 1280×640) the card's top (50svh − h/2) ran under the C3 chrome ("Side projects" / "01 / 04" at max(104px, 11svh)); binds only below ≈ 830px tall with 44vw binding |
+| `engine.ts` reduced motion | leaves the ticker only after a SETTLED frame was drawn (`shownSettled`) | render while dirty or settling | With frames > 100 ms apart the frame ending a poster crossfade could arrive after the window closed, leaving a half-faded poster (agent report) |
+| detail / 404 text-safe rects | `registerPageRects` on mount, refresh and resize | — | Pages without chapters registered no `[data-safe]`, so the MCP re-stage and the parallaxing emblem drew under the writeup at full strength |
+| `Chapter.tsx` fit guard | re-measures on motion-preference and layout switches | resize and font load | Content that overflowed only in flow stayed stuck in `[data-overflow]` after Reduced → Full |
+
+Phase 3 review fixes (same setup; canvas-only luminance sampler over the `[data-safe]` rects, AX tree via CDP, per-rAF layout-read instrumentation):
+
+| Where | Value | Spec | Why |
+|---|---|---|---|
+| `anchors.ts` `BEACON_SINK` (S9 sink) | travel and scale follow `smoothstep(.3, 1, sink)` (the beacon rides its stage first, then sets); scale × (1 − .55·e); α × k² (area-conserving, k the scale); dimmed toward ×.15 by its analytic overlap with the contact text-safe rects (box 1.45R × 1.1R, fully dimmed at 45% covered) | anchor → horizon linearly, ×.45, α ×.6 | The stage unsticks as the sink starts, so the email row and body scroll up across the beacon: it was cut flat by the scrim edge, vanished, popped back as a half-disc, and its ×.45 core (≈ 5× denser) summed to pure white under the email (canvas-only max #ffffff). Now it passes behind the text (≤ #161618 behind every contact rect at 1440×900 High) and sets as a half-disc on the ember horizon |
+| `live/s09.glsl` `uSink` | core and sparks × (1 − .8·smoothstep(0, .25, sink)) | — | The CTA disc that covers the core fades over the first quarter of the sink; a bare dense core would glare |
+| `choreo/contact.ts` disc fade | opacity 1 − smoothstep(0, .15, sink) | the first 10vh (sink .25) | Tied to the beacon's own progress: gone before the beacon leaves its stage (travel starts at .3), so the label never floats off the core (desktop and mobile) |
+| `projects/stage.ts` scrims, `uSafeW` | a panel's `[data-safe]` scrims (`--scrim`, the ::before opacity) and its mask weight ramp 0 → 1 with its text reveal (window 0: its transit-in), out with its exit; the closing card also fades out over q .02–.10 | scrim and mask switch at q .13 | An empty dark box with a hard vertical wall popped into the morph cloud at every hand-over before any text showed; the closing card ended as a 30px navy chip |
+| `choreo/chart.ts` numerals | a bar numeral fades in over the first .05 of its window and rides its bar's grain front (`--fill`, translate by the unfilled height) until the snap; while counting, the decimal is set at .42em | numerals at the final heights throughout | "0 / 0 / 0" hung over empty columns for half the Pour and later counts sat on the falling stream; full-size "1.4" is wider than a bar pitch, so riding counts collided |
+| `index.css` `low:` (height ≤ 760px), About / Capabilities | Capabilities: statement cap 4.6svh, rows py .75svh, description lead-in .6svh and line-height 1.5, list gap 2svh; About: statement cap 6.2svh, `--label-gap` 14px, stat notes 13px / 1.35 | — | Real laptop viewports (1366×657, 1536×730, 1280×720, 1280×640) fell back to flow by a few px (About's stat row, Capabilities' 3-line statement); now every one stays sticky (fit-guard need ≤ 100svh, doc 12.30 vh). Add them to the phase-4 QA matrix |
+| `live/s10.glsl` charge | line and ghosts α ×4, halo ×2.4 at uCharge 1, halo / ghosts lifted ≤ .1 toward p-signal | — | With the global bokeh falloff (tuned for S0) the defocused rest line emitted more light than the focused one: the hover read as the signal fading (−65%). Focused line energy now ≥ rest (band mean 11.9 vs 11.3 above background) |
+| `s02-chart.ts` steel slabs | ramp .22, fill α .38, edges α .75; the 6+ bar's 2-year line a signal seam at α 1 | steel p-steel, fill .55, edge .9 | Additive steel and signal read as the same grey; the stacked bar now visibly splits (steel/signal luminance .63 vs .77 before, plus the seam) |
+| `projects/detail.ts` peek | the peek also tweens `detailFx.restore` → .5 (the commit to 1) | only m .25 | At the page end the emblem sat at α .25 half under the nav band: a 25% morph there was invisible |
+| `About.tsx` statement | `text-balance`; the accent phrase `nowrap` on phones and from 1200px up | — | "decisions" was a one-word widow split from its accent at 1440 |
+
+Generator-phase deviations (measured by each state's agent and kept; the source notes the spec value next to each):
+
+| State | Deviation |
+|---|---|
+| S2 | Bar keys are the exact inverse of the §5 C1 numeral curve (a grain at height fraction h of bar k lands when the numeral shows value × smoothstep(.55 + .1k, .95 + .05k, m)); the top ≈ 5% of the 6+ bar is spread over keys .95–1. Gridlines are omitted behind the bars. The AI reticle is 16 dots; spark α is normalised per tier. |
+| S3 | Spec su sizes scaled by k = box height / .85 (fits `Nda.tsx` on every canvas). Keys per source S2 bar (0 / .45 / .9 + rand, via `barAtRank`); non-bar grains .85·row/8 + .15·rand. |
+| S4 | Rings α .45 (spec .35), clipped to the bubble, z = −.04 × emblem width (the shader reads the unit length from it). Ghosts share the trace's position and act as a trail in time. Outline / ECG / spark α .5 / .62 / .6. |
+| S5 | Printed rows register each node's z-stack onto its line of sight (one crisp dot, not a perspective streak) and draw ×1.35; unprinted rows ×.5 (spec .22/.85); columns snapped between nodes; 1,056 nodes (spec ≈ 1,900; the listed parts cover ≈ 1,100 cells); under the curtain records ×1.5 size, ×1.9 α. |
+| S6 | Back-card outlines are occluded by the cards in front; the "›_" glyph sits upper-left on the front card; 40% of stroke grains are soft sprites (×3.4 size, ×.16 α); card outlines ×1.35 / ×1.8 α under the curtain. |
+| S7 | Halo is a flattened shell (polar .65 × equatorial, r ≤ 1 fitted to 92% of the box height, ≈ .68 desktop) instead of an r 1 sphere spilling onto the caption; packets are two ember dashes per spoke. |
+| S8 | Depth flattened ×.3 after the iso rotation; a slab under-edge on each plate; motif details designed (the spec names them only); inactive plates' sparks ×.25. |
+| S9 | Ring rolled 8° and dotted; infall in a disc tilted 30° with .42 turns (face-on streams ran under the headline); shell α .28 (spec .5), rim ×2.4, core α .46 (spec 1); the ×3 charged ring speed is a crossfade between a slow and a fast population (no phase jump). |
+| S10 | ECG shifted so R sits at the screen centre; ghost α ×2 (the head's trail, the beat's echo); a comet tail on the head; line α normalised per CSS px and tier point area; line depth σ .6 su with the perspective divided out in live(), so depth only blurs. |
+| C1–C5 | Stat blocks and capability rows respond to hover / click only (the spec makes them aria-hidden / non-focusable; keyboard users get the table and scroll activation). Numerals show one decimal (set at .42em) while counting, and ride their bar's grain front. Contact ignition may fire at a nav jump cut's snap. |
+| C3 | The curtain clips an inner `[data-card-clip]` frame and the ember glow is its own layer (a clip-path on the link cut its focus ring and glow); the title line mask splits the `<a>` itself; arrivals run from `Projects.tsx` in a layout effect. |

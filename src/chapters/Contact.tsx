@@ -1,10 +1,18 @@
+import { useCallback, useEffect, useRef, type FocusEvent, type PointerEvent } from 'react';
 import Chapter from '../components/Chapter';
 import ChapterHeading from '../components/ChapterHeading';
 import CopyEmail from '../components/CopyEmail';
 import LinkLabel from '../components/LinkLabel';
 import { contact } from '../content/site';
 import { headingId } from '../scroll/chapters';
+import type { ChapterContext } from '../scroll/useChapter';
+import { contactChoreo, CTA_CHARGE_OWNER } from './choreo/contact';
+import { fireNova, setCharge, settleOneShots } from './choreo/fx';
 
+type Gsap = ChapterContext['gsap'];
+
+/** §5 C5: the email row, body and portrait fade up while the section top moves from 30% to 0%. */
+const UP_WINDOW = '30,0';
 
 /**
  * Stage-level measures (inherited by everything below):
@@ -35,13 +43,21 @@ const STAGE =
  * nothing collides on short screens (the disc is only 1.24R across; the
  * dotted shell is 2R).
  *
- * Hooks for later phases:
+ * Hooks:
  * - `[data-field-anchor="S9"]` (stage frame, --anchor-beacon-*).
  * - `a[data-beacon-cta]`: the disc. `[data-charge="S9"]` → hover / focus sets
  *   uCharge; click fires uNova (mailto opens immediately, never delayed).
- *   The sink fades it out (pointer-events none after).
+ *   The sink fades it out (`[data-cta-sink]`, pointer-events none after);
+ *   `[data-cta-disc]` scales in.
  * - `[data-safe]` on the header, on the email row + body (one block), and
- *   on the desktop portrait.
+ *   on the desktop portrait. Fade-ups move only their children, never a
+ *   [data-safe] block itself (its rect is measured for the text-safe mask).
+ *
+ * Choreography (§5 C5): choreo/contact.ts — the h2 and headline line masks
+ * (section top 60% → 15%), the disc scale-in (20% → 0%), the fade-ups (30%
+ * → 0%), the ignition at F ≥ 8.98, the sink and the footer sunset. Reduced
+ * motion: all of it is simply there; hover / focus still charges the
+ * beacon.
  *
  * Reading order: h2, headline, the CTA disc, the email row, the body, then
  * the desktop portrait and its caption (last in the DOM; it is absolutely
@@ -50,9 +66,23 @@ const STAGE =
  */
 export default function Contact() {
   const titleId = headingId('contact');
+  /** gsap for the click's nova, from the chapter context (null under reduced motion or before it loads). */
+  const gsapRef = useRef<Gsap | null>(null);
+
+  const reveal = useCallback((ctx: ChapterContext) => {
+    gsapRef.current = ctx.reduced ? null : ctx.gsap;
+    const cleanup = contactChoreo(ctx);
+    return () => {
+      cleanup();
+      gsapRef.current = null;
+      settleOneShots();
+    };
+  }, []);
+
+  useEffect(() => () => setCharge(CTA_CHARGE_OWNER, false), []);
 
   return (
-    <Chapter id="contact" labelledBy={titleId} stageClassName={STAGE}>
+    <Chapter id="contact" labelledBy={titleId} stageClassName={STAGE} reveal={reveal}>
       <div aria-hidden="true" data-field-anchor="S9" />
       <BeaconOutline />
 
@@ -68,22 +98,29 @@ export default function Contact() {
         <div className="col-start-1 row-start-1 w-full self-start px-gutter pt-[max(92px,11svh)] desktop:pt-[max(104px,11svh)] short:pt-[70px]">
           <div data-safe className="mx-auto w-fit max-w-full text-center">
             <ChapterHeading heading={contact.heading} id={titleId} />
-            <p className="t-display-l mt-3 text-ink desktop:mt-4 short:mt-2 short:text-[min(clamp(2.25rem,1.3rem+3.4vw,5rem),9svh)]">
+            <p
+              data-reveal="lines"
+              className="t-display-l mt-3 text-ink desktop:mt-4 short:mt-2 short:text-[min(clamp(2.25rem,1.3rem+3.4vw,5rem),9svh)]"
+            >
               <span className="block short:inline">{contact.headline.lead}</span>{' '}
               <span className="t-accent block short:inline">{contact.headline.accent}</span>
             </p>
           </div>
         </div>
 
-        <BeaconCta />
+        <BeaconCta gsapRef={gsapRef} />
 
         {/* Row 2: the email row, then the body (portrait inline on mobile /
             short). One scrim for both: stacked [data-safe] blocks closer
             than 48px would darken each other's text. */}
         <div className="col-start-1 row-start-2 w-full px-gutter">
           <div data-safe className="mx-auto w-fit max-w-full">
-            <CopyEmail />
-            <div className="mx-auto mt-5 max-w-[44ch] desktop:mt-4 desktop:text-center short:text-left mobile:[@media(max-height:699.98px)]:mt-3">
+            <CopyEmail data-reveal="up" data-reveal-window={UP_WINDOW} />
+            <div
+              data-reveal="up"
+              data-reveal-window={UP_WINDOW}
+              className="mx-auto mt-5 max-w-[44ch] desktop:mt-4 desktop:text-center short:text-left mobile:[@media(max-height:699.98px)]:mt-3"
+            >
               <Portrait variant="inline" />
               {/* Balanced when centred (no "talk shop." widow); pretty beside the inline portrait. */}
               <p className="t-body text-pretty text-ink-2 desktop:text-balance short:text-pretty">{contact.body}</p>
@@ -98,31 +135,56 @@ export default function Contact() {
   );
 }
 
+/** Beacon CTA hover / keyboard focus → uCharge 1 (the director damps it over 400 ms). */
+const chargeOn = (e: PointerEvent) => {
+  if (e.pointerType !== 'touch') setCharge(CTA_CHARGE_OWNER, true);
+};
+const chargeOff = () => setCharge(CTA_CHARGE_OWNER, false);
+const focusCharge = (e: FocusEvent<HTMLElement>) => {
+  if (e.currentTarget.matches(':focus-visible')) setCharge(CTA_CHARGE_OWNER, true);
+};
+
 /**
  * The beacon's core is the email button (§5 C5): a real mailto link, a
  * circle 1.24R across centred on the S9 anchor, filled with the core
  * gradient. The ember bloom behind it brightens on hover / focus (the DOM
- * side of uCharge). No transform, ever: buttons never move.
+ * side of uCharge). Its only movement is the entrance (scale .6 → 1 on
+ * [data-cta-disc]); the sink fades [data-cta-sink]. Hover / keyboard focus
+ * charge the beacon; a click fires the nova and the mailto opens at once
+ * (never prevented or delayed).
  */
-function BeaconCta() {
+function BeaconCta({ gsapRef }: { gsapRef: { readonly current: Gsap | null } }) {
   return (
-    <div className="pointer-events-none absolute top-(--anchor-beacon-cy) left-(--anchor-beacon-cx) isolate size-(--disc-d) -translate-x-1/2 -translate-y-1/2">
-      <a
-        href={contact.cta.href}
-        aria-label={contact.cta.ariaLabel}
-        data-beacon-cta
-        data-charge="S9"
-        data-cursor="hide"
-        className="peer pointer-events-auto flex size-full items-center justify-center rounded-full bg-[radial-gradient(circle,var(--color-core)_0_55%,transparent_72%)] font-sans text-base leading-none font-semibold whitespace-nowrap text-void"
-      >
-        <span>
-          <LinkLabel cta={contact.cta} />
-        </span>
-      </a>
-      <span
-        aria-hidden="true"
-        className="absolute -inset-1/2 -z-1 rounded-full bg-[radial-gradient(circle,rgb(255_106_61/0.3),rgb(255_106_61/0.08)_38%,transparent_62%)] opacity-50 transition-opacity duration-400 ease-ui peer-hover:opacity-100 peer-focus-visible:opacity-100"
-      />
+    <div
+      data-cta-sink
+      className="pointer-events-none absolute top-(--anchor-beacon-cy) left-(--anchor-beacon-cx) isolate size-(--disc-d) -translate-x-1/2 -translate-y-1/2"
+    >
+      <div data-cta-disc className="relative size-full">
+        <a
+          href={contact.cta.href}
+          aria-label={contact.cta.ariaLabel}
+          data-beacon-cta
+          data-charge="S9"
+          data-cursor="hide"
+          onPointerEnter={chargeOn}
+          onPointerLeave={chargeOff}
+          onFocus={focusCharge}
+          onBlur={chargeOff}
+          onClick={() => {
+            const gsap = gsapRef.current;
+            if (gsap) fireNova(gsap);
+          }}
+          className="peer pointer-events-auto flex size-full items-center justify-center rounded-full bg-[radial-gradient(circle,var(--color-core)_0_55%,transparent_72%)] font-sans text-base leading-none font-semibold whitespace-nowrap text-void"
+        >
+          <span>
+            <LinkLabel cta={contact.cta} />
+          </span>
+        </a>
+        <span
+          aria-hidden="true"
+          className="absolute -inset-1/2 -z-1 rounded-full bg-[radial-gradient(circle,rgb(255_106_61/0.3),rgb(255_106_61/0.08)_38%,transparent_62%)] opacity-50 transition-opacity duration-400 ease-ui peer-hover:opacity-100 peer-focus-visible:opacity-100"
+        />
+      </div>
     </div>
   );
 }
@@ -160,10 +222,12 @@ function Portrait({ variant }: { variant: 'aside' | 'inline' }) {
         data-safe
         className="group/portrait absolute bottom-[8svh] left-gutter hidden w-[min(15vw,220px)] desktop:block max-[1150px]:w-[12vw] short:hidden"
       >
-        <div className="overflow-hidden rounded-[12px] border border-line">
+        <div data-reveal="up" data-reveal-window={UP_WINDOW} className="overflow-hidden rounded-[12px] border border-line">
           <img {...img} className={`block h-auto w-full ${PORTRAIT_FILTER}`} />
         </div>
-        <figcaption className="t-label mt-3 text-balance text-ink-2">{contact.portraitCaption}</figcaption>
+        <figcaption data-reveal="up" data-reveal-window={UP_WINDOW} className="t-label mt-3 text-balance text-ink-2">
+          {contact.portraitCaption}
+        </figcaption>
       </figure>
     );
   }

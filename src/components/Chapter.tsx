@@ -1,5 +1,7 @@
 import { useLayoutEffect, useRef, type CSSProperties, type ReactNode, type Ref, type RefObject } from 'react';
 import { requestRefresh } from '../motion/lenis';
+import { subscribeMotionPref } from '../motion/motionPref';
+import { subscribeLayoutMode } from '../motion/useLayoutMode';
 import { svhPx } from '../scroll/anchors';
 import { CHAPTERS, type HomeChapterId } from '../scroll/chapters';
 import { useChapter, type UseChapterOptions } from '../scroll/useChapter';
@@ -11,7 +13,9 @@ import { useChapter, type UseChapterOptions } from '../scroll/useChapter';
  * (its bottom − the stage top + the stage's bottom padding) exceeds 100svh,
  * the section gets [data-overflow] and CSS drops it to plain flow (the
  * reduced-motion layout), which grows to fit. Re-measured on resize and
- * font load. useChapter reads [data-overflow] (via the stage's computed
+ * font load, and after a motion-preference or layout switch (content that
+ * overflows only in flow must not stay stuck in [data-overflow] once the
+ * stage is sticky again). useChapter reads [data-overflow] (via the stage's computed
  * position) like any other flow chapter; a flip requests a
  * ScrollTrigger refresh so the store and the segments follow.
  *
@@ -58,12 +62,16 @@ function useStageFit(sectionRef: RefObject<HTMLElement | null>, stageRef: RefObj
     const ro = new ResizeObserver(schedule);
     for (const el of targets) ro.observe(el);
     window.addEventListener('resize', schedule);
+    const offMotion = subscribeMotionPref(schedule);
+    const offLayout = subscribeLayoutMode(schedule);
     document.fonts?.ready.then(schedule, () => {});
     measure();
 
     return () => {
       alive = false;
       ro.disconnect();
+      offMotion();
+      offLayout();
       window.removeEventListener('resize', schedule);
       cancelAnimationFrame(raf);
       section.removeAttribute('data-overflow');

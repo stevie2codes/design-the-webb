@@ -52,6 +52,30 @@ export const PROJECT_WINDOW_VH = 62.5;
 export const PROJECT_HOLD_Q = 0.56;
 
 /**
+ * C3 hand-over, as local progress q within a window (§5 C3): the previous
+ * panel's close runs over q 0–.12, then `data-active` (and the text-safe
+ * rects, anchors.ts activeSafeRects) switch to the next panel at q .13.
+ */
+export const PROJECT_SWITCH_Q = 0.13;
+
+/**
+ * C3 panel text windows, in window-local q (§5 C3), shared by the stage
+ * choreography (chapters/projects/stage.ts) and the text-safe mask weights
+ * (anchors.ts activeSafeRects), so the scrim, the mask and the text fade
+ * together:
+ * - `exit`: the previous panel's text exits (opacity 1 → 0) over q 0–.12;
+ * - `reveal`: windows 1–3 reveal their index, title and fade-ups over
+ *   q .14–.30;
+ * - `first`: window 0 reveals during the transit-in, while the section top
+ *   moves from 30% of the viewport to stuck q .10.
+ */
+export const PROJECT_TEXT_Q = {
+  exit: [0, 0.12],
+  reveal: [0.14, 0.3],
+  first: { fromPct: 30, toQ: 0.1 },
+} as const;
+
+/**
  * The home film state each chapter shows at rest: its "poster" under
  * reduced motion (§8.2), where the field crossfades between these instead of
  * morphing. C3 shows S4–S7, one per panel (S4 + panel index). Numbers are
