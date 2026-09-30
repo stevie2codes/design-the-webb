@@ -153,7 +153,7 @@ export default function CursorRing() {
       className="group/cursor pointer-events-none fixed top-0 left-0 z-70 opacity-0 transition-opacity duration-240 ease-ui select-none nojs:hidden rm:hidden [&[data-visible]:not([data-mode=hide])]:opacity-100"
     >
       {/* 24px ring (size-6), 56px (size-14) with its label over open / live targets. */}
-      <div className="absolute top-0 left-0 flex size-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-[rgb(242_238_230/0.28)] transition-[width,height,background-color] duration-240 ease-ui group-data-[mode=live]/cursor:size-14 group-data-[mode=live]/cursor:bg-void/40 group-data-[mode=open]/cursor:size-14 group-data-[mode=open]/cursor:bg-void/40">
+      <div data-cursor-ring className="absolute top-0 left-0 flex size-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-[rgb(var(--bone-rgb)/0.28)] transition-[width,height,background-color] duration-240 ease-ui group-data-[mode=live]/cursor:size-14 group-data-[mode=live]/cursor:bg-void/40 group-data-[mode=open]/cursor:size-14 group-data-[mode=open]/cursor:bg-void/40">
         <span
           ref={labelRef}
           className="t-micro text-ink uppercase opacity-0 transition-opacity duration-180 ease-ui group-data-[mode=live]/cursor:opacity-100 group-data-[mode=open]/cursor:opacity-100"

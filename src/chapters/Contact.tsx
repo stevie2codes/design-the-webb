@@ -2,8 +2,9 @@ import { useCallback, useEffect, useRef, type FocusEvent, type PointerEvent } fr
 import Chapter from '../components/Chapter';
 import ChapterHeading from '../components/ChapterHeading';
 import CopyEmail from '../components/CopyEmail';
+import Doodle from '../components/Doodle';
 import LinkLabel from '../components/LinkLabel';
-import { contact } from '../content/site';
+import { contact, sketchNotes } from '../content/site';
 import { headingId } from '../scroll/chapters';
 import type { ChapterContext } from '../scroll/useChapter';
 import { contactChoreo, CTA_CHARGE_OWNER } from './choreo/contact';
@@ -119,8 +120,13 @@ export default function Contact() {
             short). One scrim for both: stacked [data-safe] blocks closer
             than 48px would darken each other's text. */}
         <div className="col-start-1 row-start-2 w-full px-gutter">
-          <div data-safe className="mx-auto w-fit max-w-full">
+          <div data-safe className="relative mx-auto w-fit max-w-full">
             <CopyEmail data-reveal="up" data-reveal-window={UP_WINDOW} />
+            {/* Sketch theme: a margin note beside the email (aria-hidden). */}
+            <div aria-hidden="true" className="pointer-events-none absolute -top-6 left-full ml-4 flex items-center gap-1 mobile:hidden">
+              <Doodle kind="heart" className="h-10 w-10 text-ember" />
+              <span className="aside-note">{sketchNotes.contact}</span>
+            </div>
             <div
               data-reveal="up"
               data-reveal-window={UP_WINDOW}
@@ -189,7 +195,7 @@ function BeaconCta({ gsapRef }: { gsapRef: { readonly current: Gsap | null } }) 
         </a>
         <span
           aria-hidden="true"
-          className="absolute -inset-1/2 -z-1 rounded-full bg-[radial-gradient(circle,rgb(255_106_61/0.3),rgb(255_106_61/0.08)_38%,transparent_62%)] opacity-50 transition-opacity duration-400 ease-ui peer-hover:opacity-100 peer-focus-visible:opacity-100"
+          className="absolute -inset-1/2 -z-1 rounded-full bg-[radial-gradient(circle,rgb(var(--ember-rgb)/0.3),rgb(var(--ember-rgb)/0.08)_38%,transparent_62%)] opacity-50 transition-opacity duration-400 ease-ui peer-hover:opacity-100 peer-focus-visible:opacity-100"
         />
       </div>
     </div>
@@ -227,7 +233,7 @@ function Portrait({ variant }: { variant: 'aside' | 'inline' }) {
     return (
       <figure
         data-safe
-        className="group/portrait absolute bottom-[8svh] left-gutter hidden w-[min(15vw,220px)] desktop:block max-[1150px]:w-[12vw] short:hidden"
+        className="group/portrait sketch-tape absolute bottom-[8svh] left-gutter hidden w-[min(15vw,220px)] desktop:block max-[1150px]:w-[12vw] short:hidden"
       >
         <div data-reveal="up" data-reveal-window={UP_WINDOW} className="overflow-hidden rounded-[12px] border border-line">
           <img {...img} className={`block h-auto w-full ${PORTRAIT_FILTER}`} />

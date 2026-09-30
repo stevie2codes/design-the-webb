@@ -14,9 +14,10 @@
  * per-frame inputs are the store, the director's reused frame and numbers
  * this module keeps.
  */
-import { Color, PerspectiveCamera, Scene, Vector3, Vector4, WebGLRenderer } from 'three';
+import { AdditiveBlending, Color, NormalBlending, PerspectiveCamera, Scene, Vector3, Vector4, WebGLRenderer } from 'three';
 import { gsap, ScrollTrigger } from '../motion/gsap.ts';
 import { getDebugParams } from '../debugParams.ts';
+import { getTheme, onThemeChange, type Theme } from '../theme.ts';
 import { CHAPTERS } from '../scroll/chapters.ts';
 import { anchorTransform } from '../scroll/anchors.ts';
 import { FILM_MAX, filmOverride, setFilmCeiling, tick } from '../scroll/director.ts';
@@ -27,8 +28,8 @@ import { StateId } from './states/ids.ts';
 import { createIndexLayout, makeDust, type AnchorSize, type DustData, type GenViewport, type IndexLayout } from './states/common.ts';
 import { findNameElements, isNameFontReady, sampleName, waitForNameFont, type NameElements, type NameSample } from './states/name-sampler.ts';
 import { AdaptiveGovernor, dprCap, pickTier, readTierEnv, TIERS, WarmupProbe, type AdaptiveStep, type TierName } from './tiers.ts';
-import { CAMERA_Z, CLEAR_COLOR, POSTER_TIME, SCAN_OFF, STATE_PARAMS, pxToSu } from './uniforms.ts';
-import { createMeshes, createUniforms, placeholderTextures, type FieldMeshes, type FieldUniforms } from './material.ts';
+import { CAMERA_Z, CLEAR_COLOR, PAPER_COLOR, POSTER_TIME, SCAN_OFF, STATE_PARAMS, pxToSu } from './uniforms.ts';
+import { createMeshes, createUniforms, paletteFloats, placeholderTextures, type FieldMeshes, type FieldUniforms } from './material.ts';
 import { TextureSet, WORKER_BOOT_ORDER } from './textures.ts';
 import { GeneratorClient, type GenJob } from './generation.ts';
 import { Choreo, INTRO } from './choreo.ts';
@@ -230,6 +231,8 @@ class FieldEngine {
     this.meshes.glowGeometry.setDrawRange(0, spec.sparks);
     this.scene.add(this.meshes.points);
     if (this.glowOn) this.scene.add(this.meshes.glow);
+    this.applyTheme(getTheme(), false);
+    this.cleanups.push(onThemeChange((t) => this.applyTheme(t, true)));
     this.uniforms.uMotion.value = this.mode === 'full' ? 1 : 0;
     this.set = new TextureSet(spec.texH, 0, 0);
 
@@ -1297,6 +1300,34 @@ class FieldEngine {
         : null,
       cores: this.cores,
     };
+  }
+
+  /**
+   * Sketch ↔ ink (src/theme.ts): clear colour (paper / void), blending
+   * (normal / additive), the palette ramp, the pencil sprites (uSketch) and
+   * the spark glow (off on paper: light halos read as dirt). A live switch
+   * also resamples S1, whose DOM lettering changed font, and refreshes
+   * ScrollTrigger (type metrics moved the layout).
+   */
+  private applyTheme(theme: Theme, live: boolean): void {
+    const sketch = theme === 'sketch';
+    this.clearColor.set(sketch ? PAPER_COLOR : CLEAR_COLOR);
+    this.renderer.setClearColor(this.clearColor, 1);
+    const blending = sketch ? NormalBlending : AdditiveBlending;
+    this.meshes.material.blending = blending;
+    this.meshes.glowMaterial.blending = blending;
+    this.meshes.glow.visible = !sketch;
+    paletteFloats(sketch, this.uniforms.uPalette.value);
+    this.uniforms.uSketch.value = sketch ? 1 : 0;
+    if (!live) return;
+    this.invalidate();
+    // The hero lettering changes font: resample S1 once that font is in
+    // (the next frame's style recalc starts its load).
+    requestAnimationFrame(() => {
+      void waitForNameFont().then(() => {
+        if (!this.disposed && this.ready) this.resampleName(() => ScrollTrigger.refresh());
+      });
+    });
   }
 
   private dispose(): void {

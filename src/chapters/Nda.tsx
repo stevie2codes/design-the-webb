@@ -3,9 +3,10 @@ import { useEffect, type FocusEvent, type PointerEvent } from 'react';
 import { Link } from 'react-router-dom';
 import Chapter from '../components/Chapter';
 import ChapterHeading from '../components/ChapterHeading';
+import Doodle from '../components/Doodle';
 import LinkLabel from '../components/LinkLabel';
 import { caseIndex } from '../content/caseIndex';
-import { nda } from '../content/site';
+import { nda, sketchNotes } from '../content/site';
 import { headingId } from '../scroll/chapters';
 import type { ChapterContext } from '../scroll/useChapter';
 import { setCharge } from './choreo/fx';
@@ -93,10 +94,15 @@ export default function Nda() {
 
           <p className="t-body mt-6 text-ink-2">{nda.body}</p>
 
-          <div>
+          <div className="relative">
             <p id="case-list-label" className="t-label mt-12 text-ink-2">
               {nda.listLabel}
             </p>
+            {/* Sketch theme: a margin note pointing into the list (aria-hidden). */}
+            <div aria-hidden="true" className="pointer-events-none absolute top-6 left-40 flex items-start gap-1">
+              <span className="aside-note rotate-[-2deg] text-ember">{sketchNotes.work}</span>
+              <Doodle kind="arrowDown" className="mt-3 h-12 w-12 text-ember" />
+            </div>
             <ul aria-labelledby="case-list-label" className="mt-4 border-b border-line">
               {caseIndex.map((c) => (
                 <li key={c.slug} className="border-t border-line">
@@ -179,7 +185,7 @@ function RedactedOutline({ className = '' }: { className?: string }) {
         <span
           key={top}
           style={{ top, height: h, width: `${w * 100}%` }}
-          className="absolute left-0 bg-[radial-gradient(circle,rgb(242_238_230/0.42)_0.9px,transparent_1.3px)] bg-size-[4px_4px] shadow-[inset_0_0_0_1px_rgb(242_238_230/0.14)]"
+          className="absolute left-0 bg-[radial-gradient(circle,rgb(var(--bone-rgb)/0.42)_0.9px,transparent_1.3px)] bg-size-[4px_4px] shadow-[inset_0_0_0_1px_rgb(var(--bone-rgb)/0.14)]"
         >
           {lock && <LockCut />}
         </span>

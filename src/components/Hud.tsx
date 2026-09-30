@@ -105,7 +105,7 @@ export default function Hud() {
     <div
       ref={rootRef}
       aria-hidden="true"
-      className="t-micro pointer-events-none fixed bottom-6 left-6 z-30 flex items-baseline gap-[0.75em] text-ink-2 opacity-0 transition-opacity duration-300 ease-ui select-none before:absolute before:-inset-x-6 before:-inset-y-4 before:-z-1 before:bg-[radial-gradient(closest-side,rgb(5_5_7/0.88),rgb(5_5_7/0.6)_55%,transparent)] data-visible:opacity-100 mobile:hidden short:hidden"
+      className="t-micro pointer-events-none fixed bottom-6 left-6 z-30 flex items-baseline gap-[0.75em] text-ink-2 opacity-0 transition-opacity duration-300 ease-ui select-none before:absolute before:-inset-x-6 before:-inset-y-4 before:-z-1 before:bg-[radial-gradient(closest-side,rgb(var(--void-rgb)/0.88),rgb(var(--void-rgb)/0.6)_55%,transparent)] data-visible:opacity-100 mobile:hidden short:hidden"
     >
       <span>{hud.label}</span>
       <span ref={valueRef} data-hud-value="">

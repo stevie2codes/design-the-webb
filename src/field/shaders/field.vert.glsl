@@ -143,6 +143,8 @@ uniform vec2 uBarPivot[3];
 uniform float uOpacity;
 uniform float uExposure;
 uniform vec3 uPalette[5];
+uniform float uSketch;  // 1: sketch theme (pencil on paper, normal blending)
+uniform float uInkGain; // sketch α scale (uniforms.ts SKETCH_GAIN)
 uniform float uAspect;
 uniform vec2 uViewport; // canvas CSS px
 uniform float uPxSu;    // su per CSS px (2 / canvas height)
@@ -151,6 +153,7 @@ out vec3 vColor;
 out float vAlpha;
 out float vBokeh;
 out float vSoft; // 1 = soft glow profile (the printed name's halo)
+out float vSeed; // per-particle stroke angle seed (sketch sprites)
 
 vec4 gSeed; // aSeed, visible to live()
 
@@ -415,8 +418,24 @@ void main() {
   // review: the Pulse highlight still read beside the detail writeup).
   bright = mix(min(bright, 1.0), bright, smoothstep(0.2, 0.6, mix(uOffA.w, uOffB.w, e)));
 
-  vColor = ramp(rampPos) * bright;
+  if (uSketch > 0.5) {
+    // Pencil on paper: a highlight cannot add light, so where the ink
+    // theme brightens (beam, loupe, sparks, charge) the pencil presses
+    // harder instead; normal blending darkens toward the pencil colour.
+    vColor = ramp(rampPos);
+    alpha *= uInkGain * clamp(bright, 0.6, 2.5);
+    // Background graphite (the noise end of the ramp: S0, dust, the name's
+    // band) stays a light haze so shapes carry the drawing.
+    alpha *= mix(0.35, 1.0, smoothstep(0.0, 0.25, rampPos));
+    // The name's grains are the finest pencil ticks on the page: press them
+    // harder, so the lettering reads while it resolves (QA: it was a faint
+    // stipple behind the ghost).
+    alpha *= mix(1.0, 1.7, nameK);
+  } else {
+    vColor = ramp(rampPos) * bright;
+  }
   vAlpha = alpha;
+  vSeed = aSeed.y;
   vBokeh = smoothstep(2.0, 3.5, dof);
   vSoft = mix(la.soft, lb.soft, e);
   // Invisible points never reach the rasteriser.

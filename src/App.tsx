@@ -7,6 +7,7 @@ import Hud from './components/Hud';
 import JumpCutOverlay from './components/JumpCutOverlay';
 import Nav from './components/Nav';
 import Rail from './components/Rail';
+import SketchDefs from './components/SketchDefs';
 import SkipLink from './components/SkipLink';
 import FieldCanvas from './field/FieldCanvas';
 import { onScrollRefresh, scrollInstant, useSmoothScroll } from './motion/lenis';
@@ -209,6 +210,7 @@ export function AppShell() {
   return (
     <>
       <ScrollInfra />
+      <SketchDefs />
       <SkipLink />
       <FieldCanvas />
       <Atmosphere />

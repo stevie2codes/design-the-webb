@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" class="no-js" style="background:#050507">
+<html lang="en" class="no-js" data-theme="ink" style="background:#050507">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -10,6 +10,8 @@
       //  - no-js → js
       //  - rm when the visitor chose "Reduced" in the footer toggle, or the OS
       //    asks for reduced motion and they have not explicitly chosen "Full"
+      //  - data-theme: "ink" (the dark field, the default) or "sketch" (paper
+      //    notebook), from localStorage['dtw:theme'] (src/theme.ts)
       //  - data-layout: the mobile rule (keep in sync with MQ.mobile in
       //    src/field/layout.ts and the `mobile` variant in src/index.css)
       //  - data-intro="pending": the §6 intro will probably run (full motion,
@@ -20,6 +22,16 @@
       (function () {
         var d = document.documentElement;
         d.className = d.className.replace(/\bno-js\b/, 'js');
+        var theme = null;
+        try { theme = localStorage.getItem('dtw:theme'); } catch (e) {}
+        if (theme === 'sketch') {
+          d.setAttribute('data-theme', 'sketch');
+          d.style.background = '#f3eee3';
+          var m = document.querySelector('meta[name="theme-color"]');
+          if (m) m.setAttribute('content', '#f3eee3');
+          var cs = document.querySelector('meta[name="color-scheme"]');
+          if (cs) cs.setAttribute('content', 'light');
+        }
         var stored = null;
         try { stored = localStorage.getItem('dtw:motion'); } catch (e) {}
         var osReduce = false;

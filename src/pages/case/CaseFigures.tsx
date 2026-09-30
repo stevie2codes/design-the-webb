@@ -33,7 +33,7 @@ const icon = { strokeWidth: 1.5, 'aria-hidden': true } as const;
 
 function Panel({ label, children, className = '' }: { label?: string; children: ReactNode; className?: string }) {
   return (
-    <div className={`rounded-[12px] border border-line bg-surface p-5 ${className}`}>
+    <div className={`sketch-box rounded-[12px] border border-line bg-surface p-5 ${className}`}>
       {label && <p className="t-micro mb-4 text-ink-3 uppercase">{label}</p>}
       {children}
     </div>

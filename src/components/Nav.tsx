@@ -11,6 +11,7 @@ import { subscribeLayoutMode } from '../motion/useLayoutMode';
 import { activeJumpIndex, isPlainClick, JUMP_ORDER, jumpTargets, jumpToChapter, type JumpId } from '../scroll/jump';
 import { store } from '../scroll/store';
 import LinkLabel from './LinkLabel';
+import ThemeToggle from './ThemeToggle';
 import MobileMenu, { type NavChapterId } from './MobileMenu';
 
 /** The scrim fades in once the page has scrolled this far (§6). */
@@ -251,9 +252,12 @@ export default function Nav() {
                 </li>
               ))}
             </ul>
-            <a href={nav.email.href} aria-label={nav.email.ariaLabel} className="btn btn-outline-ember min-h-11 px-5">
-              <LinkLabel cta={nav.email} />
-            </a>
+            <div className="flex items-center gap-x-3">
+              <ThemeToggle variant="icon" className="nojs:hidden" />
+              <a href={nav.email.href} aria-label={nav.email.ariaLabel} className="btn btn-outline-ember min-h-11 px-5">
+                <LinkLabel cta={nav.email} />
+              </a>
+            </div>
           </div>
 
           <button

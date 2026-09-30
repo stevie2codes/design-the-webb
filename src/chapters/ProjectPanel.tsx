@@ -221,12 +221,12 @@ function ScreenshotCard({ href, title, shot }: ScreenshotCardProps) {
       data-card-link
       data-detail-link
       data-cursor="open"
-      className={`group relative z-1 mt-10 block rounded-media desktop:h-(--panel-card-h) ${CARD_BOX}`}
+      className={`group sketch-tape relative z-1 mt-10 block rounded-media desktop:h-(--panel-card-h) ${CARD_BOX}`}
     >
       <span
         aria-hidden="true"
         data-card-glow
-        className="pointer-events-none absolute inset-0 rounded-media shadow-[0_0_80px_rgb(255_106_61/0.12)] transition-shadow duration-240 ease-ui group-hover:shadow-[0_0_96px_rgb(255_106_61/0.2)] group-focus-visible:shadow-[0_0_96px_rgb(255_106_61/0.2)]"
+        className="pointer-events-none absolute inset-0 rounded-media shadow-[0_0_80px_rgb(var(--ember-rgb)/0.12)] transition-shadow duration-240 ease-ui group-hover:shadow-[0_0_96px_rgb(var(--ember-rgb)/0.2)] group-focus-visible:shadow-[0_0_96px_rgb(var(--ember-rgb)/0.2)]"
       />
       <span
         data-card-clip

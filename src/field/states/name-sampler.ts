@@ -39,9 +39,17 @@ import {
 } from './common.ts';
 import { NAME_METRICS, NAME_TIMELINE, resolveAnchor, type LayoutMode } from '../layout.ts';
 import { Role } from '../uniforms.ts';
+import { getTheme } from '../../theme.ts';
 
 /** The font the DOM name uses (§2.5, §9.8 step 1). */
 export const NAME_FONT_SPEC = '800 condensed 100px "Archivo Variable"';
+/** The sketch theme letters the name in Permanent Marker (src/sketch.css .t-name). */
+export const SKETCH_NAME_FONT_SPEC = '400 100px "Permanent Marker"';
+
+/** The font spec the DOM name uses in the current theme. */
+function nameFontSpec(): string {
+  return getTheme() === 'sketch' ? SKETCH_NAME_FONT_SPEC : NAME_FONT_SPEC;
+}
 const FALLBACK_FAMILY = '"Archivo Variable", ui-sans-serif, system-ui, sans-serif';
 
 /** Shares of M (§3.10 S1). */
@@ -77,7 +85,7 @@ export async function waitForNameFont(timeoutMs = 1500): Promise<boolean> {
   const fonts = typeof document !== 'undefined' ? document.fonts : undefined;
   if (!fonts) return true;
   try {
-    await Promise.race([fonts.load(NAME_FONT_SPEC), new Promise((r) => setTimeout(r, timeoutMs))]);
+    await Promise.race([fonts.load(nameFontSpec()), new Promise((r) => setTimeout(r, timeoutMs))]);
   } catch {
     /* a failed load falls through to the fallback stack */
   }
@@ -86,7 +94,7 @@ export async function waitForNameFont(timeoutMs = 1500): Promise<boolean> {
 
 export function isNameFontReady(): boolean {
   try {
-    return typeof document === 'undefined' || !document.fonts || document.fonts.check(NAME_FONT_SPEC);
+    return typeof document === 'undefined' || !document.fonts || document.fonts.check(nameFontSpec());
   } catch {
     return false;
   }
