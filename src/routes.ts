@@ -1,16 +1,17 @@
 /**
  * Route table for the build-time prerender (SPEC §0, §9.11, §9.12 "No JS").
  *
- * Every known URL ships as static HTML: `/`, each `/work/:slug` and the 404
- * page. The prerender (scripts/prerender-plugin.mjs) stamps each file's
+ * Every known URL ships as static HTML: `/`, each `/work/:slug`, each
+ * `/case-studies/:slug` and the 404 page. The prerender (scripts/prerender-plugin.mjs) stamps each file's
  * `#root` with its route key (`data-ssr`); main.tsx hydrates only when that
  * key matches the key of the URL being loaded, and renders from scratch
  * otherwise. An unknown `/work/<slug>` is served work/404.html ("Project
- * not found", §6), any other unknown path 404.html, so both paths (JS on and
- * off) show the same page (§8.4).
+ * not found", §6), any other unknown path 404.html (an unknown case study
+ * included), so both paths (JS on and off) show the same page (§8.4).
  *
  * Pure data: no DOM access (the prerender imports it in Node).
  */
+import { caseIndex, isCaseSlug } from './content/caseIndex';
 import { getProject, projects } from './content/projects';
 import { detail, notFound, siteTitle } from './content/site';
 
@@ -22,10 +23,24 @@ export const PROJECT_NOT_FOUND_KEY = 'project-404';
 /** "/work/pulse/" → "/work/pulse"; "" → "/". */
 const normalize = (pathname: string): string => pathname.replace(/\/+$/, '') || '/';
 
-/** The route key for a pathname: "/", "/work/<slug>", "project-404" or "404". */
+/** decodeURIComponent, or null for a malformed escape. */
+const decode = (s: string): string | null => {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return null;
+  }
+};
+
+/** The route key for a pathname: "/", "/work/<slug>", "/case-studies/<slug>", "project-404" or "404". */
 export function routeKey(pathname: string): string {
   const path = normalize(pathname);
   if (path === '/') return '/';
+  const study = /^\/case-studies\/([^/]+)$/.exec(path);
+  if (study) {
+    const slug = decode(study[1]);
+    return slug !== null && isCaseSlug(slug) ? `/case-studies/${slug}` : NOT_FOUND_KEY;
+  }
   const match = /^\/work\/([^/]+)$/.exec(path);
   if (!match) return NOT_FOUND_KEY;
   let slug: string;
@@ -55,6 +70,12 @@ export const PRERENDER_ROUTES: readonly PrerenderRoute[] = [
     key: `/work/${p.slug}`,
     file: `work/${p.slug}.html`,
     title: detail.documentTitle(p.title),
+  })),
+  ...caseIndex.map((c) => ({
+    url: `/case-studies/${c.slug}`,
+    key: `/case-studies/${c.slug}`,
+    file: `case-studies/${c.slug}.html`,
+    title: detail.documentTitle(c.title),
   })),
   { url: '/404', key: NOT_FOUND_KEY, file: '404.html', title: detail.documentTitle(notFound.title) },
   // Any unknown slug renders the same "Project not found" page (public/_redirects

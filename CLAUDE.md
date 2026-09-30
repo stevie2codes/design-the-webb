@@ -8,7 +8,7 @@ The shared scroll ↔ field APIs (store, segments, director, anchors, field entr
 
 ## Tech stack
 
-- **Framework**: React 19, TypeScript and Vite 7. Routing uses `react-router-dom` 7. Home is eager (the hero `<h1>` is the LCP); `/work/:slug` and the 404 are lazy and code-split. **Every route is prerendered at build time** (`scripts/prerender-plugin.mjs` renders `src/entry-server.tsx` for each entry in `src/routes.ts`), so the no-JS path has all copy and links, and `main.tsx` hydrates. Keep `window`/`document` access out of render (effects and handlers only).
+- **Framework**: React 19, TypeScript and Vite 7. Routing uses `react-router-dom` 7. Home is eager (the hero `<h1>` is the LCP); `/work/:slug`, `/case-studies/:slug` and the 404 are lazy and code-split. **Every route is prerendered at build time** (`scripts/prerender-plugin.mjs` renders `src/entry-server.tsx` for each entry in `src/routes.ts`), so the no-JS path has all copy and links, and `main.tsx` hydrates. Keep `window`/`document` access out of render (effects and handlers only).
 - **Styling**: Tailwind CSS v4 through `@tailwindcss/vite`. There is no `tailwind.config.js`.
 - **Motion**: GSAP 3.14 (ScrollTrigger, SplitText; the four custom eases are cubic-béziers registered with `gsap.registerEase`, no CustomEase). Smooth scroll is Lenis 1.3, on the desktop full-motion path only. **The whole motion layer is lazy-loaded after hydration** (§8.5 initial JS budget): nothing in the initial bundle imports `gsap`, `lenis` or `motion/gsap.ts` statically (see `motion/lazy.ts`). `@gsap/react` is not used (its `useGSAP` imports gsap statically); useChapter builds an equivalent scoped `gsap.context`.
 - **Field**: vanilla `three` 0.186 with one `THREE.Points` object and a GLSL3 `ShaderMaterial`. It is **dynamically imported after first paint** and never enters the initial bundle. The Canvas2D fallback never imports three.
@@ -18,7 +18,7 @@ The shared scroll ↔ field APIs (store, segments, director, anchors, field entr
   - JetBrains Mono Variable
 
   There are **no Google Fonts** `<link>`s. The Archivo latin woff2 is preloaded by the `preloadFonts()` plugin in `vite.config.ts`. `index.css` declares metric-matched local fallback faces (`Archivo Fallback`, `Instrument Serif Fallback`, `JetBrains Mono Fallback`: `size-adjust` / `ascent-override` over Arial, Times and Courier) second in each stack, so the font swap does not shift layout (CLS 0). Re-measure them if a font or type role changes.
-- **Icons**: `lucide-react` at `strokeWidth={1.5}`. Only Lock, ArrowUpRight, ArrowUp, Copy, Menu and X are used.
+- **Icons**: `lucide-react` at `strokeWidth={1.5}`: Lock, ArrowUpRight, ArrowUp, ArrowRight, Copy, Menu and X, plus Check, ChevronRight and Users inside the case-study figures.
 - **Removed, do not reintroduce**: Framer Motion, `components/hero-bg/`, the cream/orange palette, custom cursors that hide the native cursor, and magnetic buttons.
 
 ## Commands
@@ -50,6 +50,9 @@ src/
   content/
     site.ts               EVERY home + shell string (Appendix A). Never hard-code copy in components.
     projects.ts           side projects: verbatim copy + index, emblem StateId, side, screenshot w/h
+    caseIndex.ts          case-study index (slug, CS/0n, title, summary): light, used by home + routes
+    caseStudies.ts        case-study copy, sections, figure data (lazy page chunk only). From Stephen's brief:
+                          no invented facts or metrics; product, client and people stay unnamed
   motion/
     tokens.ts             EASE, DUR, LOOP, BEZIER + cubicBezier() (pure; safe in the initial bundle)
     lazy.ts               loadGsap() / loadScroll() / loadReveal() / scrollRuntime(): the lazy motion chunks
@@ -92,7 +95,8 @@ src/
   components/             Chapter, ChapterHeading, LinkLabel, Chip, SkipLink, Atmosphere, Nav, MobileMenu,
                           Rail, Hud, SignalMeter (the hero's S/N meter), signal.ts (the shared S/N sampler),
                           Footer, CopyEmail, MotionToggle, CursorRing, JumpCutOverlay, EmblemOutline
-  pages/                  HomePage (composes chapters), ProjectDetailPage, NotFoundPage
+  pages/                  HomePage (composes chapters), ProjectDetailPage, CaseStudyPage (+ case/CaseFigures:
+                          recreated mock-UI figures), NotFoundPage
 scripts/                  gen-layout-css.mjs, make-grain.mjs, make-og.mjs, prerender-plugin.mjs (+ .d.mts; build
                           prerender with per-route og:title / og:url / canonical, and the `vite preview` 404 fallback)
 ```

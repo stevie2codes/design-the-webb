@@ -18,9 +18,11 @@ import { initialHash } from './scroll/initialHash';
 import { store } from './scroll/store';
 import { focusQuietly, isJumpId, jumpToChapter, jumpToY } from './scroll/jump';
 
-// Code-split routes (§8.5): only /work/:slug and the 404. Home is eager so
-// the hero <h1> (the LCP) is in the first chunk as well as the static HTML.
+// Code-split routes (§8.5): /work/:slug, /case-studies/:slug and the 404.
+// Home is eager so the hero <h1> (the LCP) is in the first chunk as well as
+// the static HTML.
 const ProjectDetailPage = lazy(() => import('./pages/ProjectDetailPage'));
+const CaseStudyPage = lazy(() => import('./pages/CaseStudyPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
 /**
@@ -219,6 +221,7 @@ export function AppShell() {
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/work/:slug" element={<ProjectDetailPage />} />
+            <Route path="/case-studies/:slug" element={<CaseStudyPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </Suspense>

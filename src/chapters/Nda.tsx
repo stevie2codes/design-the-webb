@@ -1,8 +1,10 @@
-import { Lock } from 'lucide-react';
+import { ArrowRight, Lock } from 'lucide-react';
 import { useEffect, type FocusEvent, type PointerEvent } from 'react';
+import { Link } from 'react-router-dom';
 import Chapter from '../components/Chapter';
 import ChapterHeading from '../components/ChapterHeading';
 import LinkLabel from '../components/LinkLabel';
+import { caseIndex } from '../content/caseIndex';
 import { nda } from '../content/site';
 import { headingId } from '../scroll/chapters';
 import type { ChapterContext } from '../scroll/useChapter';
@@ -28,7 +30,7 @@ function ndaReveal(ctx: ChapterContext): void {
   ctx.track(ctx.fadeUp(els, { window: win, stagger: 0.05 }));
 }
 
-/** "Request by email" hover / keyboard focus → uCharge on S3: the scan speeds up, a peek that reveals nothing. */
+/** A case-study link or "Request a walkthrough" hover / keyboard focus → uCharge on S3: the scan speeds up. */
 const chargeOn = (e: PointerEvent) => {
   if (e.pointerType !== 'touch') setCharge(CHARGE_OWNER, true);
 };
@@ -52,10 +54,14 @@ const focusOn = (e: FocusEvent<HTMLElement>) => {
  * Choreography (§5 C2): seg2 (the topple, S2 → S3) runs from `work` − 85vh
  * to − 25vh, scrubbed by the director. The text fades up (16px) while the
  * section top moves from 75% to 35% (stagger .05). Hovering or keyboard-
- * focusing "Request by email" (`[data-charge="S3"]`) sets uCharge on S3 —
- * the scan speeds up ×3 and the slabs dim top → bottom: a peek that
- * reveals nothing. Reduced motion: the text is simply there; the charge
- * still applies (the engine renders it on demand).
+ * focusing a case-study link or "Request a walkthrough"
+ * (`[data-charge="S3"]`) sets uCharge on S3 — the scan speeds up ×3 and the
+ * slabs dim top → bottom: the redaction is being read. Reduced motion: the
+ * text is simply there; the charge still applies (the engine renders it on
+ * demand).
+ *
+ * The case studies (SPEC §5 C2, §6 "Case study") are listed from the light
+ * content/caseIndex.ts; their full copy lives in the lazy page chunk.
  */
 export default function Nda() {
   const titleId = headingId('work');
@@ -86,6 +92,41 @@ export default function Nda() {
           <h3 className="t-display-m mt-5 text-balance text-ink">{nda.title}</h3>
 
           <p className="t-body mt-6 text-ink-2">{nda.body}</p>
+
+          <div>
+            <p id="case-list-label" className="t-label mt-12 text-ink-2">
+              {nda.listLabel}
+            </p>
+            <ul aria-labelledby="case-list-label" className="mt-4 border-b border-line">
+              {caseIndex.map((c) => (
+                <li key={c.slug} className="border-t border-line">
+                  <Link
+                    to={`/case-studies/${c.slug}`}
+                    data-charge="S3"
+                    data-cursor="open"
+                    onPointerEnter={chargeOn}
+                    onPointerLeave={chargeOff}
+                    onFocus={focusOn}
+                    onBlur={chargeOff}
+                    className="group grid grid-cols-[3.75rem_1fr_auto] items-baseline gap-x-4 py-5 outline-offset-4"
+                  >
+                    <span className="t-label text-ember">{c.indexLabel}</span>
+                    <span>
+                      <span className="t-lede block text-ink transition-colors duration-240 ease-ui group-hover:text-ember group-focus-visible:text-ember">
+                        {c.title}
+                      </span>
+                      <span className="t-body mt-1 block text-ink-2">{c.summary}</span>
+                    </span>
+                    <ArrowRight
+                      aria-hidden="true"
+                      strokeWidth={1.5}
+                      className="size-5 translate-y-1 text-ink-2 transition-transform duration-240 ease-ui group-hover:translate-x-1 group-focus-visible:translate-x-1"
+                    />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
 
           <a
             href={nda.cta.href}
