@@ -427,6 +427,10 @@ void main() {
     // Background graphite (the noise end of the ramp: S0, dust, the name's
     // band) stays a light haze so shapes carry the drawing.
     alpha *= mix(0.35, 1.0, smoothstep(0.0, 0.25, rampPos));
+    // The name's grains are the finest pencil ticks on the page: press them
+    // harder, so the lettering reads while it resolves (QA: it was a faint
+    // stipple behind the ghost).
+    alpha *= mix(1.0, 1.7, nameK);
   } else {
     vColor = ramp(rampPos) * bright;
   }
