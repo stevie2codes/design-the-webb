@@ -661,7 +661,7 @@ Shares below are fractions of **M (shape)**. Sparks are listed separately; they 
 - **Sparks:** 60% trace the lock outline inside slab 2; 40% form an ember keyline .03 su left of the block, full block height.
 - **Colour:** `p-signal` at α .42, which reads as bone-grey slabs.
 - **Live:** a scan band 0.06 su tall sweeps top → bottom every 4.5 s (+45% brightness).
-- **`uCharge`** (hovering or focusing "Request by email"): the scan speeds up ×3 and the slabs dim 30% from top to bottom. It is a peek that reveals nothing.
+- **`uCharge`** (hovering or focusing a case-study link or "Request a walkthrough"): the scan speeds up ×3 and the slabs dim 30% from top to bottom: the redaction is being read.
 
 #### S4 PULSE — "your city's open data, one question away"
 
@@ -994,8 +994,10 @@ Conventions:
 - h2 (`.t-label` ember): **02 — Selected work**
 - Lucide `Lock` icon (14px, ember, stroke 1.5) + `.t-label` ember: **Under NDA**
 - h3 (`.t-display-m` ink): **Tyler Technologies case studies**
-- Body (`.t-body` ink-2): **Detailed case studies from my work at Tyler Technologies. Available upon request.**
-- Link: **Request by email →** → `mailto:stephen@designthewebb.com?subject=Case%20study%20request`. The label makes clear it is an email request and does not suggest the case studies are online.
+- Body (`.t-body` ink-2): **Three case studies from my work on an AI assistant that builds reports from plain language. Details are generalized under NDA, and every visual is recreated with fictional data.**
+- `.t-label` ink-2 **Case studies**, then a list of the three case studies (`content/caseIndex.ts`), each a row link to `/case-studies/:slug` between 1px `line` rules: the index (**CS/01**…, `.t-label` ember), the title (`.t-lede` ink, ember on hover / focus-visible) over its one-line summary (`.t-body` ink-2), and an arrow that nudges right.
+- Link: **Request a walkthrough →** → `mailto:stephen@designthewebb.com?subject=Case%20study%20walkthrough` (`.btn-line`).
+- The case studies come from Stephen's own brief (Aug–Sep 2026). The product, client, customers, people and internal systems stay unnamed; nothing is claimed that the brief does not state, and there are no metrics.
 
 **Timeline.** seg2 (the topple) runs at y 325 → 385. Text fades up when the section top moves from 75% to 35% (stagger .05). Hovering or focusing the link sets `uCharge` on S3.
 
@@ -1064,7 +1066,7 @@ Conventions:
   1. **Product Design** — From discovery to delivery. I design end-to-end product experiences rooted in user research, business strategy, and systems thinking.
   2. **Data Visualization** — Turning dense datasets into legible, actionable interfaces. Charts, dashboards, and exploratory tools that respect the complexity of real data.
   3. **Design Systems** — Building scalable component libraries and design tokens that keep teams aligned and products consistent across dozens of surfaces.
-  4. **Prototyping** — High-fidelity interactive prototypes that communicate intent precisely. I prototype to think, test, and sell ideas—not just to document them.
+  4. **Prototyping in code** — I prototype in the real codebase, against real data, and ship small production changes when an idea is ready. I prototype to think, test, and sell ideas—not just to document them.
 
 **Timeline.**
 
@@ -1220,6 +1222,16 @@ The DOM `<h1>` stays in the accessibility tree throughout. Only `mask-image` hid
   - Click commits: m → 1 over 1,100 ms while the DOM exits.
 - **Unknown slug:** **Project not found** / *The project you're looking for doesn't exist.* / **Back to work** (→ `/#projects`), all over S0.
 - `document.title` = `{title} — Stephen Webb`.
+
+**Case study `/case-studies/:slug`** (code-split).
+
+- **Field:** director route mode over S0 STATIC (the noise the work was pulled out of). The header, the meta row, each section's content column and the closing blocks are `[data-safe]`, registered as page rects.
+- **Header:** **← All work** (`.t-label`, to `/#work`) · **CS/0n · Case study** (`.t-label` ember) · h1 `.t-display-xl` title · lede `.t-lede` ink-2, 52ch · Lock + **Details generalized under NDA. Every visual is recreated with fictional data.** (`.t-label` ink-2) · a meta row (`<dl>`, "Project details"): Role, Scope, Context, Year.
+- **Sections:** a 12-column grid: the heading `.t-label` ember in columns 1–3, the content in 4–11. Blocks: paragraphs (`.t-body` ink-2, emphasis in ink), dash lists, numbered steps and lessons (`.t-lede` ink title over `.t-body`), **decision cards** (`surface`, 16px radius: the decision as `.t-display-m`, then Considered (ink-3) / Chose (ember label, ink) / Why), and **figures**.
+- **Figures:** recreated mock UI on solid surfaces, aria-hidden, each with a visible caption **Fig. n** + one sentence. Fictional names and data only.
+- **Close:** **Want the full story, with the real screens?** (`.t-display-m`) + **Request a walkthrough →** (`.btn-ember`), then a **Next case study** row like Next project.
+- **Unknown slug:** the 404 page (`routeKey` maps it to 404.html).
+- `document.title` = `{title} — Stephen Webb`. Each study is prerendered to `case-studies/<slug>.html` with its own og:url and canonical.
 
 **404** (code-split).
 
@@ -1738,7 +1750,8 @@ All copy is **verbatim or tightened** from `HomePage.tsx`, `projects.ts`, `Foote
 | About ¶2 | Right now I'm leading the end-to-end redesign of our reporting platform, re-envisioning it as an **AI-centric experience** — giving users specific, use-case-driven reporting tools that actually meet their needs. | About |
 | Stats | 2 · Years as a Developer · I speak your engineers' language / 4+ · Years in Product Design · Discovery to delivery / 6+ · Years in Tech · SaaS, gov-tech, AI / 1 · AI Reporting Platform · End-to-end redesign | `stats` |
 | Work h2 | 02 — Selected work | Section label |
-| NDA | Under NDA · Tyler Technologies case studies · Detailed case studies from my work at Tyler Technologies. Available upon request. | NDA card |
+| NDA | Under NDA · Tyler Technologies case studies · Three case studies from my work on an AI assistant that builds reports from plain language. Details are generalized under NDA, and every visual is recreated with fictional data. · Case studies · Request a walkthrough → | NDA card; case-study brief |
+| Case studies | Three studies (index, title, summary, lede, meta, sections, figure copy) in `content/caseIndex.ts` and `content/caseStudies.ts`, written only from Stephen's case-study brief (Aug–Sep 2026): Nothing to publish · Showing the assistant's work · Designing in the codebase | Case-study brief |
 | Side projects label | Side projects | Work |
 | Pulse | A conversational interface for querying government open data through Socrata APIs. Your city's open data, one question away. · TypeScript · AI · Gov Data · https://pulse-data.netlify.app/ · https://github.com/stevie2codes/socrata-chat | `projects.ts` |
 | Gov Data Generator | A tool for generating realistic government data sets for testing and prototyping reporting interfaces. · TypeScript · Data · Tooling · https://stevie2codes.github.io/gov-data-generator/ · https://github.com/stevie2codes/gov-data-generator | `projects.ts` |
@@ -1747,7 +1760,7 @@ All copy is **verbatim or tightened** from `HomePage.tsx`, `projects.ts`, `Foote
 | Writeups | All 12 paragraphs verbatim | `projects.ts` |
 | Capabilities h2 | 03 — What I do | Section label |
 | Capabilities statement | Thoughtful craft across the *full product surface* | Capabilities |
-| Capabilities rows | 4 titles + descriptions verbatim (§5 C4) | `capabilities` |
+| Capabilities rows | 4 titles + descriptions (§5 C4); "Prototyping in code" updated from the case-study brief | `capabilities` |
 | Contact h2 | 04 — Get in touch | Section label |
 | Contact headline | Let's build something / *worth using* | Contact |
 | Contact body | Always interested in connecting with fellow designers, engineers, and product thinkers. Let's talk shop. | Contact |
@@ -1759,7 +1772,7 @@ All copy is **verbatim or tightened** from `HomePage.tsx`, `projects.ts`, `Foote
 **New UI microcopy.** These strings make no factual claims:
 
 - "Scroll to resolve"
-- "Request by email →"
+- "Request a walkthrough →", "Case studies", "Case study", "CS/01"–"CS/03", "Next case study", "Project details" (meta label), "Considered" / "Chose" / "Why", "Fig. n", "Want the full story, with the real screens?", "Details generalized under NDA. Every visual is recreated with fictional data."
 - "Project details →", "Live site ↗", "GitHub ↗"
 - "Open {title} project details"
 - "Email me ↗"

@@ -172,15 +172,17 @@ export const chart = {
 } as const;
 
 // ─── C2 NDA (#work) ─────────────────────────────────────────────────────────
+/** The case studies themselves are in caseStudies.ts. */
 export const nda = {
   heading: { num: '02', title: 'Selected work' } satisfies SectionHeading,
   badge: 'Under NDA',
   title: 'Tyler Technologies case studies',
-  body: 'Detailed case studies from my work at Tyler Technologies. Available upon request.',
+  body: 'Three case studies from my work on an AI assistant that builds reports from plain language. Details are generalized under NDA, and every visual is recreated with fictional data.',
+  listLabel: 'Case studies',
   cta: {
-    label: 'Request by email',
+    label: 'Request a walkthrough',
     post: '→',
-    href: `${MAILTO}?subject=Case%20study%20request`,
+    href: `${MAILTO}?subject=Case%20study%20walkthrough`,
   } satisfies Cta,
 } as const;
 
@@ -241,9 +243,9 @@ export const capabilities = {
         'Building scalable component libraries and design tokens that keep teams aligned and products consistent across dozens of surfaces.',
     },
     {
-      title: 'Prototyping',
+      title: 'Prototyping in code',
       description:
-        'High-fidelity interactive prototypes that communicate intent precisely. I prototype to think, test, and sell ideas—not just to document them.',
+        'I prototype in the real codebase, against real data, and ship small production changes when an idea is ready. I prototype to think, test, and sell ideas—not just to document them.',
     },
   ] satisfies readonly Capability[],
 } as const;
