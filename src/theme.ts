@@ -2,8 +2,8 @@
  * Site theme (sketch branch): `html[data-theme]` is "sketch" (a hand-drawn
  * notebook on paper) or "ink" (the original dark field). The pre-paint
  * script in index.html sets it before first paint from
- * localStorage['dtw:theme'] (default DEFAULT_THEME), and the static
- * attribute on <html> covers no-JS. CSS swaps the colour tokens and type
+ * localStorage['dtw:theme'] (default DEFAULT_THEME, ink), and the
+ * static attribute on <html> covers no-JS. CSS swaps the colour tokens and type
  * roles under [data-theme="sketch"]; the field engine and the Canvas2D
  * fallback subscribe with onThemeChange (clear colour, blending, palette,
  * sprite shapes, and an S1 resample for the hand-lettered name).
@@ -16,7 +16,7 @@ import { useSyncExternalStore } from 'react';
 export type Theme = 'sketch' | 'ink';
 
 export const THEME_KEY = 'dtw:theme';
-export const DEFAULT_THEME: Theme = 'sketch';
+export const DEFAULT_THEME: Theme = 'ink';
 /** Paper and void, for <meta name="theme-color"> (keep in sync with index.css). */
 export const THEME_BG: Readonly<Record<Theme, string>> = { sketch: '#f3eee3', ink: '#050507' };
 

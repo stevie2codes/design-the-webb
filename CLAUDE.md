@@ -2,7 +2,7 @@
 
 Personal portfolio for Stephen Webb, Senior Product Designer. The site is dark and cinematic, built around a "living data field". One persistent full-viewport WebGL point field sits behind every route and morphs as you scroll. Sticky DOM chapters sit on top of it. As you scroll, noise comes into focus as the name, then pours into an honest career chart, redaction bars, a silhouette for each project, a capability stack, and finally a beacon you can click.
 
-**This branch (`claude/sketch-mode`) adds a second theme:** `sketch`, a hand-drawn notebook on paper, is the default; `ink` is the original dark field. See "Themes" below and SPEC §13.
+**Two themes:** `ink`, the original dark field, is the default; `sketch`, a hand-drawn notebook on paper, is one toggle away. See "Themes" below and SPEC §13.
 
 **`docs/redesign/SPEC.md` is the source of truth.** The `§` references below point into it. If this file and the spec disagree, follow the spec and fix this file.
 
@@ -217,9 +217,9 @@ Each has a desktop value and a mobile value. They are generated from `field/layo
 
 **Stacking order** (z-index): body glow −1, `#field-root` 0, atmosphere 1, `main` and footer 2, rail and HUD 30, nav 40, mobile menu 50, jump-cut overlay 60, cursor ring 70, skip link 80.
 
-## Themes (sketch branch, SPEC §13)
+## Themes (SPEC §13)
 
-- `html[data-theme="sketch" | "ink"]`: static `sketch` on `<html>` in index.html (no-JS), set before paint from `localStorage['dtw:theme']`. `src/theme.ts` holds `getTheme` / `setTheme` / `toggleTheme` / `onThemeChange` / `useTheme`. The toggles are `ThemeToggle` (nav icon + footer "Theme: Sketch / Ink").
+- `html[data-theme="sketch" | "ink"]`: static `ink` on `<html>` in index.html (no-JS), set before paint from `localStorage['dtw:theme']`. `src/theme.ts` holds `getTheme` / `setTheme` / `toggleTheme` / `onThemeChange` / `useTheme`. The toggles are `ThemeToggle` (nav icon + footer "Theme: Sketch / Ink").
 - `src/sketch.css` redefines the colour tokens and the `--void-rgb` / `--bone-rgb` / `--ember-rgb` / `--steel-rgb` channels under `[data-theme="sketch"]`, so utilities follow. **Never hard-code `rgb(5 5 7 …)` or `rgb(242 238 230 …)`: use `rgb(var(--void-rgb) / a)` / `rgb(var(--bone-rgb) / a)`.**
 - Sketch type: Permanent Marker (`.t-name`, `.t-display-xl`, `.t-title`), Caveat (`.t-display-l/-m`, `.t-stat`, `.t-readout`, `.t-accent` with a highlighter swipe), Architects Daughter (`.t-label`, `.t-micro`, `.btn`, `.chip`). Body copy stays Archivo.
 - Drawn outlines: `.btn`, `.chip` and `.sketch-box` draw their border on a `::before` through `#sk-rough` / `#sk-rough-lg` (`SketchDefs.tsx`, whose seed "boils" ~7×/s in full motion). `.sketch-tape` (host must be positioned) adds masking tape. `<Doodle kind>` draws a pencil mark in on first view; `.aside-note` is a handwritten margin note (copy in `site.ts` `sketchNotes`). All are aria-hidden and hidden in ink.
