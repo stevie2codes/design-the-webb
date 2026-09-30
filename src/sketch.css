@@ -1,0 +1,347 @@
+/*
+ * Sketch theme (html[data-theme="sketch"]): the site as a designer's
+ * notebook. Paper instead of void, graphite and pencil instead of light,
+ * hand lettering for display type and labels (body copy stays Archivo for
+ * reading), outlines that are drawn, not ruled, and that "boil" like hand
+ * animation (the #sk-rough filter's seed steps ~7×/s, SketchDefs.tsx; still
+ * under reduced motion).
+ *
+ * Everything keys off the same tokens as the ink theme: the colour tokens
+ * and the --*-rgb channels are redefined here, so utilities, scrims and
+ * components follow without per-component forks. Contrast (§2.3) on paper
+ * #f3eee3: ink 14.3:1, ink-2 8.1:1, ink-3 5.1:1 (5.5 on surface), ember
+ * 5.3:1, steel 6.1:1; paper on ember 5.3:1.
+ *
+ * Custom CSS lives in cascade layers (CLAUDE.md, Tailwind v4): the same
+ * named layers index.css declares, so utilities still win.
+ */
+
+@layer base {
+  :root {
+    --void-rgb: 5 5 7;
+    --bone-rgb: 242 238 230;
+    --ember-rgb: 255 106 61;
+    --steel-rgb: 140 151 173;
+  }
+
+  html[data-theme="sketch"] {
+    --void-rgb: 243 238 227;
+    --bone-rgb: 33 30 27;
+    --ember-rgb: 178 55 18;
+    --steel-rgb: 52 89 143;
+
+    --color-void: #f3eee3; /* paper */
+    --color-deep: #ebe4d5; /* footer, menu: a darker sheet */
+    --color-surface: #faf7f0; /* cards: fresh paper */
+    --color-surface-2: #efe8da;
+    --color-line: rgb(33 30 27 / 0.16);
+    --color-line-strong: rgb(33 30 27 / 0.32);
+    --color-ink: #211e1b; /* graphite ink */
+    --color-ink-2: #4b463e;
+    --color-ink-3: #6a645a;
+    --color-ember: #b23712; /* red pencil */
+    --color-ember-hot: #8f2b0c;
+    --color-ember-deep: #6e200a;
+    --color-core: #211e1b; /* the beacon CTA becomes an ink blot */
+    --color-steel: #34598f; /* blue pencil */
+
+    --font-hand: "Caveat Variable", "Caveat", "Segoe Print", "Bradley Hand", cursive;
+    --font-marker: "Permanent Marker", "Segoe Print", "Marker Felt", cursive;
+    --font-arch: "Architects Daughter", "Segoe Print", "Chalkboard SE", cursive;
+    --hilite: rgb(255 212 59 / 0.7); /* highlighter */
+    --pencil-blue: rgb(52 89 143 / 0.1); /* graph paper rules */
+    --margin-red: rgb(214 72 60 / 0.35); /* notebook margin line */
+
+    color-scheme: light;
+    -webkit-font-smoothing: auto;
+  }
+
+  /* No coloured glow under paper: the first-paint backdrop is the sheet. */
+  html[data-theme="sketch"] body::before {
+    background: none;
+  }
+
+  /* Graph paper that scrolls with the page (the notebook moves, the drawing
+     is pinned to the desk behind it), with a red margin rule on desktop. */
+  html[data-theme="sketch"] #main {
+    background-image:
+      linear-gradient(to right, var(--pencil-blue) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--pencil-blue) 1px, transparent 1px);
+    background-size: 28px 28px;
+    background-position: -1px -1px;
+  }
+  @media (min-width: 768px) {
+    html[data-theme="sketch"] #main {
+      background-image:
+        linear-gradient(to right, transparent calc(var(--gutter) * 0.5 - 1px), var(--margin-red) calc(var(--gutter) * 0.5 - 1px), var(--margin-red) calc(var(--gutter) * 0.5 + 1px), transparent calc(var(--gutter) * 0.5 + 1px)),
+        linear-gradient(to right, var(--pencil-blue) 1px, transparent 1px),
+        linear-gradient(to bottom, var(--pencil-blue) 1px, transparent 1px);
+      background-size: 100% 100%, 28px 28px, 28px 28px;
+      background-position: 0 0, -1px -1px, -1px -1px;
+    }
+  }
+
+  html[data-theme="sketch"] ::selection {
+    background-color: var(--hilite);
+    color: var(--color-ink);
+  }
+}
+
+@layer components {
+  /* ── Atmosphere: a warm paper vignette and fibre, never a dark edge ────── */
+  html[data-theme="sketch"] .atmo-vignette {
+    background: radial-gradient(ellipse 120% 90% at 50% 45%, transparent 60%, rgb(120 96 60 / 0.12) 100%);
+  }
+  html[data-theme="sketch"] .atmo-grain {
+    mix-blend-mode: multiply;
+    opacity: 0.06;
+  }
+  html[data-theme="sketch"][data-tier="high"]:not(.rm) .atmo-grain {
+    opacity: 0.08;
+  }
+
+  /* ── Type roles, hand-lettered ─────────────────────────────────────────── */
+  html[data-theme="sketch"] .t-name {
+    font-family: var(--font-marker);
+    font-weight: 400;
+    font-stretch: normal;
+    font-size: calc(var(--name-fs) * 0.74);
+    letter-spacing: 0.01em;
+  }
+  html[data-theme="sketch"] .t-display-xl,
+  html[data-theme="sketch"] .t-title {
+    font-family: var(--font-marker);
+    font-weight: 400;
+    font-stretch: normal;
+    letter-spacing: 0.01em;
+    line-height: 1;
+  }
+  html[data-theme="sketch"] .t-display-l,
+  html[data-theme="sketch"] .t-display-m {
+    font-family: var(--font-hand);
+    font-weight: 600;
+    letter-spacing: 0;
+    line-height: 1.02;
+  }
+  html[data-theme="sketch"] .t-display-l {
+    font-size: clamp(2.5rem, 1.4rem + 3.5vw, 5.5rem);
+  }
+  html[data-theme="sketch"] .t-display-m {
+    font-size: clamp(2rem, 1.35rem + 2.3vw, 3.5rem);
+  }
+  html[data-theme="sketch"] .t-stat,
+  html[data-theme="sketch"] .t-readout {
+    font-family: var(--font-hand);
+    font-weight: 700;
+    font-stretch: normal;
+    letter-spacing: 0;
+  }
+  html[data-theme="sketch"] .t-readout {
+    font-size: clamp(2.5rem, 1.6rem + 1.8vw, 3.5rem);
+  }
+  html[data-theme="sketch"] .t-label,
+  html[data-theme="sketch"] .t-micro,
+  html[data-theme="sketch"] .btn,
+  html[data-theme="sketch"] .chip {
+    font-family: var(--font-arch);
+    font-weight: 400;
+    letter-spacing: 0.08em;
+  }
+  html[data-theme="sketch"] .t-label,
+  html[data-theme="sketch"] .btn {
+    font-size: 0.8125rem;
+  }
+  /* Voice words: a highlighter swipe behind hand lettering (ink on yellow). */
+  html[data-theme="sketch"] .t-accent {
+    font-family: var(--font-hand);
+    font-style: normal;
+    font-weight: 700;
+    font-size: 1.12em;
+    line-height: 0.9;
+    color: var(--color-ink);
+    padding-inline: 0.12em;
+    background-image: linear-gradient(100deg, transparent 0.5%, var(--hilite) 2.5%, var(--hilite) 96%, transparent 99%);
+    background-repeat: no-repeat;
+    background-size: 100% 0.5em;
+    background-position: 0 86%;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+  }
+
+  /* ── Drawn outlines ─────────────────────────────────────────────────────
+     Buttons, chips and .sketch-box cards hide their ruled border and draw
+     it on a ::before through the #sk-rough displacement filter, so only the
+     line wobbles: the text inside stays crisp. Uneven corner radii read as
+     hand-drawn even before the filter. */
+  html[data-theme="sketch"] .btn,
+  html[data-theme="sketch"] .chip,
+  html[data-theme="sketch"] .sketch-box {
+    position: relative;
+    isolation: isolate;
+    border-color: transparent !important;
+  }
+  html[data-theme="sketch"] .btn,
+  html[data-theme="sketch"] .chip {
+    background-color: transparent !important;
+  }
+  html[data-theme="sketch"] .btn::before,
+  html[data-theme="sketch"] .chip::before,
+  html[data-theme="sketch"] .sketch-box::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    border: 1.75px solid var(--sk-line, var(--color-ink));
+    background-color: var(--sk-fill, transparent);
+    filter: url(#sk-rough);
+    transition: background-color 240ms var(--ease-ui);
+  }
+  html[data-theme="sketch"] .btn::before {
+    border-radius: 22px 14px 24px 12px / 14px 24px 12px 22px;
+  }
+  html[data-theme="sketch"] .chip::before {
+    border-width: 1.25px;
+    border-radius: 14px 9px 15px 8px / 9px 15px 8px 14px;
+  }
+  html[data-theme="sketch"] .sketch-box::before {
+    border-width: 2.25px;
+    border-radius: 18px 10px 20px 8px / 10px 18px 8px 20px;
+    filter: url(#sk-rough-lg);
+    --sk-line: rgb(33 30 27 / 0.7);
+  }
+  html[data-theme="sketch"] .btn-ember {
+    --sk-fill: var(--color-ember);
+    color: var(--color-void);
+  }
+  html[data-theme="sketch"] .btn-ember:hover,
+  html[data-theme="sketch"] .btn-ember:focus-visible {
+    --sk-fill: var(--color-ember-hot);
+  }
+  html[data-theme="sketch"] .btn-ember:active {
+    --sk-fill: var(--color-ember-deep);
+  }
+  html[data-theme="sketch"] .btn-line:hover,
+  html[data-theme="sketch"] .btn-line:focus-visible {
+    --sk-fill: var(--hilite);
+  }
+  html[data-theme="sketch"] .btn-outline-ember {
+    --sk-line: var(--color-ember);
+  }
+  html[data-theme="sketch"] .btn-outline-ember:hover,
+  html[data-theme="sketch"] .btn-outline-ember:focus-visible {
+    --sk-fill: var(--color-ember);
+  }
+
+  /* Underlines are drawn squiggles, scribbled in on hover / focus. */
+  html[data-theme="sketch"] .link-line::after {
+    height: 6px;
+    bottom: calc(50% - 1.05em);
+    background-color: currentColor;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='6' viewBox='0 0 24 6'%3E%3Cpath d='M0 3.5 Q3 0.5 6 3 T12 3 T18 3.2 T24 3' fill='none' stroke='black' stroke-width='1.6'/%3E%3C/svg%3E") repeat-x 0 0 / 24px 6px;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='6' viewBox='0 0 24 6'%3E%3Cpath d='M0 3.5 Q3 0.5 6 3 T12 3 T18 3.2 T24 3' fill='none' stroke='black' stroke-width='1.6'/%3E%3C/svg%3E") repeat-x 0 0 / 24px 6px;
+  }
+
+  /* Tape: a strip of masking tape holding a photo or a card to the page. */
+  /* The host must be positioned (relative / absolute). */
+  html[data-theme="sketch"] .sketch-tape::after {
+    content: "";
+    position: absolute;
+    top: -12px;
+    left: 50%;
+    z-index: 3;
+    width: min(96px, 38%);
+    height: 26px;
+    transform: translateX(-50%) rotate(-3deg);
+    pointer-events: none;
+    background: rgb(232 214 170 / 0.72);
+    box-shadow: 0 1px 2px rgb(60 40 10 / 0.12);
+    -webkit-mask: linear-gradient(90deg, transparent 0 2px, #000 2px calc(100% - 2px), transparent calc(100% - 2px));
+    mask: linear-gradient(90deg, transparent 0 2px, #000 2px calc(100% - 2px), transparent calc(100% - 2px));
+  }
+
+  /* Project cards sit on the page with a paper drop shadow, not an ember glow. */
+  html[data-theme="sketch"] [data-card-glow] {
+    box-shadow: 0 14px 30px rgb(70 50 20 / 0.16) !important;
+  }
+
+  /* Block-level accents (their own line) highlight only their words. */
+  html[data-theme="sketch"] .t-accent {
+    width: fit-content;
+  }
+  html[data-theme="sketch"] :where(.text-center, [class*="text-center"]) .t-accent {
+    margin-inline: auto;
+  }
+
+  /* ── Doodles (Doodle.tsx): hand-drawn marks that draw themselves in ───── */
+  .doodle {
+    display: none;
+    pointer-events: none;
+    overflow: visible;
+  }
+  html[data-theme="sketch"] .doodle {
+    display: block;
+  }
+  .doodle path {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    transition: stroke-dashoffset 900ms var(--ease-cine);
+  }
+  .doodle[data-drawn] path {
+    stroke-dashoffset: 0;
+  }
+  .doodle[data-drawn] path:nth-child(2) {
+    transition-delay: 450ms;
+  }
+  .doodle[data-drawn] path:nth-child(3) {
+    transition-delay: 650ms;
+  }
+  html.rm .doodle path,
+  html.no-js .doodle path {
+    stroke-dashoffset: 0;
+    transition: none;
+  }
+  /* Handwritten asides next to doodles (aria-hidden flourishes). */
+  .aside-note {
+    display: none;
+    font-family: var(--font-hand);
+    font-weight: 600;
+    font-size: 1.6rem;
+    line-height: 1;
+    color: var(--color-steel);
+    white-space: nowrap;
+    pointer-events: none;
+    transform: rotate(-4deg);
+  }
+  html[data-theme="sketch"] .aside-note {
+    display: block;
+  }
+
+  /* The cursor ring is a pencil circle. */
+  html[data-theme="sketch"] [data-cursor-ring] {
+    filter: url(#sk-rough);
+  }
+
+  /* Forced colors: no filters, doodles or tape. */
+  @media (forced-colors: active) {
+    html[data-theme="sketch"] .btn::before,
+    html[data-theme="sketch"] .chip::before,
+    html[data-theme="sketch"] .sketch-box::before,
+    html[data-theme="sketch"] .sketch-tape::after,
+    html[data-theme="sketch"] .doodle,
+    html[data-theme="sketch"] .aside-note {
+      display: none;
+    }
+    html[data-theme="sketch"] .btn,
+    html[data-theme="sketch"] .chip,
+    html[data-theme="sketch"] .sketch-box {
+      border-color: CanvasText !important;
+    }
+  }
+}

@@ -154,8 +154,8 @@ const SWATCH_BG: Readonly<Record<Swatch, string>> = { steel: 'bg-steel', signal:
 const SWATCH_STROKE: Readonly<Record<Swatch, string>> = { steel: 'stroke-steel', signal: 'stroke-ink' };
 /** The slab fill: a 4px dot grid (r .95px at α .62), centred in each slab. */
 const SWATCH_DOTS: Readonly<Record<Swatch, string>> = {
-  steel: 'bg-[radial-gradient(circle,rgb(140_151_173/0.62)_0.95px,transparent_1.3px)]',
-  signal: 'bg-[radial-gradient(circle,rgb(242_238_230/0.62)_0.95px,transparent_1.3px)]',
+  steel: 'bg-[radial-gradient(circle,rgb(var(--steel-rgb)/0.62)_0.95px,transparent_1.3px)]',
+  signal: 'bg-[radial-gradient(circle,rgb(var(--bone-rgb)/0.62)_0.95px,transparent_1.3px)]',
 };
 
 /**

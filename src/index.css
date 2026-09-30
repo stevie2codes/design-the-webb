@@ -81,6 +81,9 @@
 /* The §6 intro is expected or running: html[data-intro="pending"] (the
    pre-paint script's guess, until the engine decides) or "running" (engine). */
 @custom-variant intro (&:where([data-intro], [data-intro] *));
+/* Theme (src/theme.ts, src/sketch.css): the paper notebook or the dark field. */
+@custom-variant sketch (&:where([data-theme="sketch"], [data-theme="sketch"] *));
+@custom-variant ink (&:where([data-theme="ink"], [data-theme="ink"] *));
 @custom-variant staged {
   @media (min-width: 1024px) and (min-height: 500px), (min-width: 768px) and (orientation: landscape) and (min-height: 500px) {
     &:where(html.js:not(.rm) .chapter[data-sticky]:not([data-overflow]) *) {
@@ -107,8 +110,8 @@
   --color-deep: #0a0a0e; /* footer, mobile menu */
   --color-surface: #111117; /* cards, screenshot frames */
   --color-surface-2: #18181f; /* hover / pressed surface */
-  --color-line: rgb(242 238 230 / 0.1); /* hairlines, chip borders (decorative) */
-  --color-line-strong: rgb(242 238 230 / 0.18); /* rail track, dividers (decorative) */
+  --color-line: rgb(var(--bone-rgb) / 0.1); /* hairlines, chip borders (decorative) */
+  --color-line-strong: rgb(var(--bone-rgb) / 0.18); /* rail track, dividers (decorative) */
 
   --color-ink: #f2eee6; /* primary text (warm bone) */
   --color-ink-2: #a7a39a; /* body copy, secondary */
@@ -420,8 +423,8 @@
     z-index: -1;
     pointer-events: none;
     background:
-      radial-gradient(60% 40% at 40% 55%, rgb(255 106 61 / 0.06), transparent 70%),
-      radial-gradient(50% 50% at 75% 40%, rgb(140 151 173 / 0.05), transparent 70%);
+      radial-gradient(60% 40% at 40% 55%, rgb(var(--ember-rgb) / 0.06), transparent 70%),
+      radial-gradient(50% 50% at 75% 40%, rgb(var(--steel-rgb) / 0.05), transparent 70%);
   }
 
   /* Focus (§8.1): every hover effect must also fire on :focus-visible.
@@ -777,7 +780,7 @@
     inset: calc(-1 * var(--sfy)) max(calc(-1 * var(--sf)), calc(-1 * var(--gutter)));
     z-index: -1;
     pointer-events: none;
-    background-color: rgb(5 5 7 / 0.82);
+    background-color: rgb(var(--void-rgb) / 0.82);
     /* Rounded, so the intersected ramps meet in a soft corner, not a mitre. */
     border-radius: var(--sfy);
     /* --scrim: a block's text reveal can scrub its scrim in with it (the C3
@@ -819,25 +822,25 @@
     background:
       radial-gradient(
         ellipse 64vw 36svh at 22vw 75svh,
-        rgb(5 5 7 / 0.8),
-        rgb(5 5 7 / 0.7) 32%,
-        rgb(5 5 7 / 0.42) 60%,
-        rgb(5 5 7 / 0.12) 84%,
+        rgb(var(--void-rgb) / 0.8),
+        rgb(var(--void-rgb) / 0.7) 32%,
+        rgb(var(--void-rgb) / 0.42) 60%,
+        rgb(var(--void-rgb) / 0.12) 84%,
         transparent
       ),
       radial-gradient(
         ellipse 36vw 11svh at 16vw 40svh,
-        rgb(5 5 7 / 0.62),
-        rgb(5 5 7 / 0.3) 55%,
+        rgb(var(--void-rgb) / 0.62),
+        rgb(var(--void-rgb) / 0.3) 55%,
         transparent
       );
     transition: opacity 300ms var(--ease-ui);
     @variant mobile {
       background: radial-gradient(
         ellipse 95vw 34svh at 40vw 60svh,
-        rgb(5 5 7 / 0.8),
-        rgb(5 5 7 / 0.66) 36%,
-        rgb(5 5 7 / 0.36) 66%,
+        rgb(var(--void-rgb) / 0.8),
+        rgb(var(--void-rgb) / 0.66) 36%,
+        rgb(var(--void-rgb) / 0.36) 66%,
         transparent
       );
     }

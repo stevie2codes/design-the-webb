@@ -1,8 +1,9 @@
 import { Fragment, useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import Chapter from '../components/Chapter';
 import LinkLabel from '../components/LinkLabel';
+import Doodle from '../components/Doodle';
 import SignalMeter from '../components/SignalMeter';
-import { chart, hero, stats } from '../content/site';
+import { chart, hero, sketchNotes, stats } from '../content/site';
 import { getField } from '../field/index';
 import { NAME_TIMELINE } from '../field/layout';
 import { headingId } from '../scroll/chapters';
@@ -322,6 +323,11 @@ export default function Hero() {
           >
             <LinkLabel cta={hero.ctaSecondary} />
           </a>
+          {/* Sketch theme: a margin note pointing back at the CTAs (aria-hidden). */}
+          <span aria-hidden="true" className="pointer-events-none -ml-4 hidden items-center gap-1 sketch:desktop:flex">
+            <Doodle kind="arrowLeft" className="h-10 w-16 text-steel" />
+            <span className="aside-note -translate-y-3">{sketchNotes.hero}</span>
+          </span>
         </div>
       </div>
 

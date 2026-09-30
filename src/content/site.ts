@@ -322,6 +322,14 @@ export const footer = {
   backToTop: { label: 'Back to top', post: '↑' } satisfies CtaLabel,
   /** Toggle button with aria-pressed (pressed = reduced). */
   motion: { label: 'Motion', full: 'Full', reduced: 'Reduced' },
+  /** Theme toggle (sketch branch): aria-pressed = the ink theme. */
+  theme: {
+    label: 'Theme',
+    sketch: 'Sketch',
+    ink: 'Ink',
+    toSketch: 'Switch to the sketch theme',
+    toInk: 'Switch to the ink theme',
+  },
   /** aria-hidden outline wordmark. */
   wordmark: 'Stephen Webb',
 } as const;
@@ -347,6 +355,16 @@ export const notFound = {
   title: 'Page not found',
   body: "The page you're looking for doesn't exist or has been moved.",
   cta: { label: 'Back to home', post: '→', href: '/' } satisfies Cta,
+} as const;
+
+/**
+ * Sketch theme margin notes (aria-hidden, handwritten beside doodles). Playful
+ * microcopy with no factual claims — pending Stephen's approval (Appendix A).
+ */
+export const sketchNotes = {
+  hero: 'start here!',
+  work: 'the good stuff',
+  contact: 'say hi!',
 } as const;
 
 /** "01 — About" as one plain string (e.g. for logs or document titles). */

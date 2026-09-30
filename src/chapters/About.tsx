@@ -82,16 +82,18 @@ export default function About() {
         <div data-safe data-cursor="text" className="mt-12 desktop:mt-[max(2.5rem,5svh)]">
           {/* The portrait floats beside ¶1 only: flow-root keeps ¶2 clear of it. */}
           <div className="flow-root">
-            <img
-              src={portrait.src}
-              width={portrait.width}
-              height={portrait.height}
-              alt={portrait.alt}
-              loading="lazy"
-              decoding="async"
-              data-reveal="up"
-              className="float-left mt-1.5 mr-6 mb-2 h-40 w-30 rounded-[12px] border border-line object-cover brightness-90 grayscale"
-            />
+            {/* The wrapper carries the float and the sketch theme's tape (an <img> has no ::after). */}
+            <span data-reveal="up" className="sketch-tape relative float-left mt-1.5 mr-6 mb-2 block h-40 w-30">
+              <img
+                src={portrait.src}
+                width={portrait.width}
+                height={portrait.height}
+                alt={portrait.alt}
+                loading="lazy"
+                decoding="async"
+                className="block size-full rounded-[12px] border border-line object-cover brightness-90 grayscale"
+              />
+            </span>
             <p data-reveal="up" className="t-body text-ink-2">
               <Rich runs={first} />
             </p>

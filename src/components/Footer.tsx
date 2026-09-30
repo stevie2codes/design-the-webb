@@ -6,6 +6,7 @@ import { headingId } from '../scroll/chapters';
 import { focusQuietly, isPlainClick } from '../scroll/jump';
 import LinkLabel from './LinkLabel';
 import MotionToggle from './MotionToggle';
+import ThemeToggle from './ThemeToggle';
 
 /** Footer links: `.t-label` ink with the scale-in underline; 44px targets. */
 const LINK = 'link-line t-label text-ink';
@@ -52,7 +53,7 @@ export default function Footer() {
     <footer className="relative z-2 flex flex-col overflow-hidden border-t border-line bg-deep desktop:min-h-[40svh]">
       <div ref={registerHorizon} aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-24 opacity-0">
         <span className="absolute inset-x-[20%] top-0 h-px bg-linear-to-r from-transparent via-ember/80 to-transparent" />
-        <span className="absolute inset-0 bg-[radial-gradient(34%_100%_at_50%_0%,rgb(255_106_61/0.1),transparent_100%)]" />
+        <span className="absolute inset-0 bg-[radial-gradient(34%_100%_at_50%_0%,rgb(var(--ember-rgb)/0.1),transparent_100%)]" />
       </div>
       <div className="grid gap-y-5 px-gutter pt-8 desktop:grid-cols-[1fr_auto_1fr] desktop:items-center desktop:gap-x-10 desktop:pt-[max(40px,5svh)]">
         {/* The prerender bakes in the build year; the client may differ at New Year. */}
@@ -76,6 +77,7 @@ export default function Footer() {
           </a>
           {/* The toggle needs JS (it flips html.rm and persists the choice). */}
           <MotionToggle className="nojs:hidden" />
+          <ThemeToggle className="nojs:hidden" />
         </div>
       </div>
 
@@ -111,7 +113,7 @@ function Wordmark() {
           textLength={WM_W}
           lengthAdjust="spacingAndGlyphs"
           fill="none"
-          stroke="rgb(242 238 230 / 0.12)"
+          style={{ stroke: 'rgb(var(--bone-rgb) / 0.12)' }}
           strokeWidth={1}
           vectorEffect="non-scaling-stroke"
           className="font-sans font-extrabold [font-stretch:75%]"

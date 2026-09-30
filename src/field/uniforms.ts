@@ -91,6 +91,30 @@ export const PALETTE: readonly PaletteStop[] = [
 export const CLEAR_COLOR = 0x050507;
 
 /**
+ * Sketch theme (src/theme.ts, src/sketch.css): the same ramp positions as
+ * pencils on paper. noise → light graphite, steel → blue pencil, signal →
+ * ink, ember → red pencil, core → a warm ochre. Drawn with normal (not
+ * additive) blending, so stacked grains darken toward the pencil colour.
+ */
+export const SKETCH_PALETTE: readonly PaletteStop[] = [
+  { name: 'p-noise', hex: 0x8a8274, ramp: 0 },
+  { name: 'p-steel', hex: 0x34598f, ramp: 0.25 },
+  { name: 'p-signal', hex: 0x1f1c19, ramp: 0.5 },
+  { name: 'p-ember', hex: 0xb8401a, ramp: 0.75 },
+  { name: 'p-core', hex: 0xc7862a, ramp: 1 },
+];
+
+/** Sketch clear colour = paper (--color-void under [data-theme="sketch"]). */
+export const PAPER_COLOR = 0xf3eee3;
+
+/**
+ * Sketch α scale on top of FIELD_GAIN: graphite on paper saturates to
+ * solid far sooner than light adds up on black (tuned on screenshots: S0
+ * reads as a faint pencil haze, S1 as dense stippled lettering).
+ */
+export const SKETCH_GAIN = 0.5;
+
+/**
  * Global exposure calibration: multiplies every particle's α (shader
  * `FIELD_GAIN`). §3.6 fixes relative brightness (base α × density / DOF
  * falloff) but not the absolute scale, which depends on N and the point

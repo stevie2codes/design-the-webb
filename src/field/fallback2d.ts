@@ -68,7 +68,8 @@ import {
   type NameSample,
 } from './states/name-sampler.ts';
 import { TIERS } from './tiers.ts';
-import { CAMERA_Z, PALETTE, PathId, Role } from './uniforms.ts';
+import { CAMERA_Z, PALETTE, PathId, Role, SKETCH_PALETTE } from './uniforms.ts';
+import { getTheme, onThemeChange } from '../theme.ts';
 import { GeneratorClient, type GenJob } from './generation.ts';
 import { clearIntroPending } from './index.ts';
 import type { CreateField, FieldBootOptions, FieldHandle, FieldMode, FieldStats, PauseReason } from './index.ts';
@@ -126,6 +127,9 @@ const STATE_LIFT: Readonly<Partial<Record<StateId, number>>> = { [StateId.STATIC
 
 /** The void (--color-void): the fallback canvas is opaque, like the WebGL one. */
 const VOID = '#050507';
+/** Sketch theme: paper, pencil palette, normal compositing at this α scale. */
+const PAPER = '#f3eee3';
+const SKETCH_ALPHA = 0.55;
 
 /** The tier whose dims the standalone fallback generates at (the subsample is tier-independent). */
 const GEN_TIER = TIERS.low;
@@ -216,8 +220,8 @@ const ALPHA_BASE = 0.025;
 const ALPHA_STEP = Math.log(1.4);
 const BUCKETS = RAMP_LEVELS * ALPHA_LEVELS;
 
-function buildStyles(): string[] {
-  const rgb = PALETTE.map((p) => [(p.hex >> 16) & 255, (p.hex >> 8) & 255, p.hex & 255]);
+function buildStyles(sketch = false): string[] {
+  const rgb = (sketch ? SKETCH_PALETTE : PALETTE).map((p) => [(p.hex >> 16) & 255, (p.hex >> 8) & 255, p.hex & 255]);
   const out: string[] = [];
   for (let r = 0; r < RAMP_LEVELS; r++) {
     const s = (r / (RAMP_LEVELS - 1)) * 4;
@@ -225,7 +229,7 @@ function buildStyles(): string[] {
     const t = s - i;
     const c = [0, 1, 2].map((k) => Math.round(rgb[i][k] + (rgb[i + 1][k] - rgb[i][k]) * t));
     for (let a = 0; a < ALPHA_LEVELS; a++) {
-      const al = Math.min(1, ALPHA_BASE * Math.pow(1.4, a));
+      const al = Math.min(1, ALPHA_BASE * Math.pow(1.4, a)) * (sketch ? SKETCH_ALPHA : 1);
       out.push(`rgba(${c[0]},${c[1]},${c[2]},${al.toFixed(3)})`);
     }
   }
@@ -428,7 +432,8 @@ const SIG_N = 80;
 export class FallbackPainter {
   readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
-  private readonly styles = buildStyles();
+  private sketch = getTheme() === 'sketch';
+  private styles = buildStyles(this.sketch);
   private idxLayout: IndexLayout | null = null;
   private idx: Uint32Array = new Uint32Array(0);
   private readonly cache: (Compact | null)[] = new Array<Compact | null>(STATE_COUNT).fill(null);
@@ -453,8 +458,10 @@ export class FallbackPainter {
   constructor(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D) {
     this.canvas = canvas;
     this.ctx = ctx;
-    // Opaque void, like the WebGL canvas (its fade-in opacity still applies).
-    canvas.style.backgroundColor = VOID;
+    // Opaque void (paper in the sketch theme), like the WebGL canvas (its
+    // fade-in opacity still applies).
+    canvas.style.backgroundColor = this.sketch ? PAPER : VOID;
+    onThemeChange(() => this.invalidate());
   }
 
   /** Forget the picture: the next paint() draws. */
@@ -854,9 +861,16 @@ export class FallbackPainter {
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     const n = this.n;
     if (n === 0) return;
+    const sketch = getTheme() === 'sketch';
+    if (sketch !== this.sketch) {
+      this.sketch = sketch;
+      this.styles = buildStyles(sketch);
+      this.canvas.style.backgroundColor = sketch ? PAPER : VOID;
+    }
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    // Additive, like the WebGL field: overlapping dots in dense shapes brighten.
-    ctx.globalCompositeOperation = 'lighter';
+    // Additive, like the WebGL field: overlapping dots in dense shapes
+    // brighten. Pencil on paper composites normally (dots darken).
+    ctx.globalCompositeOperation = sketch ? 'source-over' : 'lighter';
     const counts = this.counts;
     counts.fill(0);
     const bk = this.bk;

@@ -1734,6 +1734,21 @@ Contrast script used for §2.2: WCAG relative luminance with sRGB linearisation,
 
 ---
 
+## 13. Sketch theme (branch `claude/sketch-mode`)
+
+A second look for the same film: **the site as a designer's notebook.** Paper, graphite and pencil instead of void and light; hand lettering; outlines that are drawn and gently "boil" like hand animation; doodles and margin notes that show some play. `sketch` is the default on this branch; **ink** (§1–12) is one toggle away and unchanged.
+
+- **Theme switch.** `html[data-theme]`, set before paint from `localStorage['dtw:theme']` (static `sketch` for no-JS). Toggles: a 44px nav icon (moon / pencil, named by what it switches to) and a footer text toggle **Theme: Sketch / Ink** (aria-pressed = ink). Switching is live: tokens, type, the field and the S1 lettering all follow; nothing reloads.
+- **Palette (tokens under the sketch theme).** void → paper `#f3eee3`; deep `#ebe4d5`; surface `#faf7f0`; surface-2 `#efe8da`; line / line-strong graphite at 16% / 32%; ink `#211e1b`, ink-2 `#4b463e`, ink-3 `#6a645a`; ember → red pencil `#b23712` (hot `#8f2b0c`); steel → blue pencil `#34598f`; core → ink (the beacon CTA is an ink blot). A highlighter yellow at 70% marks voice words and selection. All §2.3 rules hold (ink-3 on solid surfaces; ember text ≥ 12px).
+- **Paper.** Graph paper (28px blue rules at 10%) scrolls with `#main`; a red margin rule at half the gutter on desktop; a warm vignette and paper fibre (the grain texture, multiplied) replace the dark vignette.
+- **Type.** Permanent Marker for the name and page titles; Caveat for statements, the hero lede, stats and the S/N readout; Architects Daughter for labels, buttons and chips. Body copy stays Archivo for reading. The name is set at 0.74 × `--name-fs` (the marker is wider than Archivo Condensed).
+- **Drawn UI.** Buttons, chips and `.sketch-box` cards draw their outline through an SVG displacement filter (`#sk-rough`; `#sk-rough-lg` for large boxes) with uneven radii; the noise seed steps ~7×/s in full motion (the line boil). Underlines are squiggles. Voice words sit on a highlighter swipe. Photos and project cards are taped to the page.
+- **Doodles and margin notes** (aria-hidden, drawn in once when first in view; drawn at once under reduced motion and without JS): hero — a blue-pencil arrow and **start here!** beside the CTAs; work — **the good stuff** with a red arrow into the case-study list; contact — a heart and **say hi!** beside the email.
+- **The field in pencil.** Clear colour paper; normal blending, so grains darken toward their pencil; palette noise → light graphite, steel → blue pencil, signal → ink, ember → red pencil, core → ochre. An in-focus grain is a short pencil tick at its own angle; a defocused one a charcoal smudge; where the ink theme brightens (beam, loupe, sparks), the pencil presses harder. The noise end of the ramp stays a light haze (α × .35) so shapes carry the drawing. No spark glow on paper. The Canvas2D fallback draws the same palette source-over on paper.
+
+
+---
+
 ## Appendix A — Copy deck
 
 All copy is **verbatim or tightened** from `HomePage.tsx`, `projects.ts`, `Footer.tsx`, `ProjectDetailPage.tsx` and `NotFoundPage.tsx`. No new facts are introduced.
@@ -1770,6 +1785,8 @@ All copy is **verbatim or tightened** from `HomePage.tsx`, `projects.ts`, `Foote
 | 404 | Page not found · The page you're looking for doesn't exist or has been moved. · Back to home | `NotFoundPage.tsx` |
 
 **New UI microcopy.** These strings make no factual claims:
+
+- Sketch theme (pending Stephen's approval): "start here!", "the good stuff", "say hi!" (margin notes); "Theme: Sketch / Ink", "Switch to the sketch theme" / "Switch to the ink theme"
 
 - "Scroll to resolve"
 - "Request a walkthrough →", "Case studies", "Case study", "CS/01"–"CS/03", "Next case study", "Project details" (meta label), "Considered" / "Chose" / "Why", "Fig. n", "Want the full story, with the real screens?", "Details generalized under NDA. Every visual is recreated with fictional data."

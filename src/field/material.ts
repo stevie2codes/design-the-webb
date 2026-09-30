@@ -24,7 +24,7 @@ import fragSrc from './shaders/field.frag.glsl?raw';
 import noiseSrc from './shaders/noise.glsl?raw';
 import liveSrc from './shaders/live.glsl?raw';
 import { makeIndexPositions, makeParticleSeeds } from './states/common.ts';
-import { FIELD_GAIN, LIMITS, PALETTE } from './uniforms.ts';
+import { FIELD_GAIN, LIMITS, PALETTE, SKETCH_GAIN, SKETCH_PALETTE } from './uniforms.ts';
 
 /** Strip comment-only lines and blank lines (smaller chunk, same program). */
 function trimGlsl(src: string): string {
@@ -61,9 +61,8 @@ const VERTEX = trimGlsl(vertSrc)
 const FRAGMENT = trimGlsl(fragSrc);
 
 /** Palette ramp as sRGB floats (the output is not colour-managed: what we write is what shows). */
-export function paletteFloats(): Float32Array {
-  const out = new Float32Array(LIMITS.palette * 3);
-  PALETTE.forEach((s, i) => {
+export function paletteFloats(sketch = false, out = new Float32Array(LIMITS.palette * 3)): Float32Array {
+  (sketch ? SKETCH_PALETTE : PALETTE).forEach((s, i) => {
     out[i * 3] = ((s.hex >> 16) & 255) / 255;
     out[i * 3 + 1] = ((s.hex >> 8) & 255) / 255;
     out[i * 3 + 2] = (s.hex & 255) / 255;
@@ -151,6 +150,9 @@ export interface FieldUniforms {
   uOpacity: IUniform<number>;
   uExposure: IUniform<number>;
   uPalette: IUniform<Float32Array>;
+  /** 1 in the sketch theme: pencil sprites, no brightness gain, α × uInkGain. */
+  uSketch: IUniform<number>;
+  uInkGain: IUniform<number>;
   uAspect: IUniform<number>;
   uViewport: IUniform<Vector2>;
   uPxSu: IUniform<number>;
@@ -209,6 +211,8 @@ export function createUniforms(placeholder: { pos: DataTexture; meta: DataTextur
     uOpacity: { value: 1 },
     uExposure: { value: 1 },
     uPalette: { value: paletteFloats() },
+    uSketch: { value: 0 },
+    uInkGain: { value: SKETCH_GAIN },
     uAspect: { value: 1 },
     uViewport: { value: new Vector2(1, 1) },
     uPxSu: { value: 0 },

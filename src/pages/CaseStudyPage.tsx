@@ -229,7 +229,7 @@ function BlockView({ block, fig }: { block: Block; fig: number }): ReactNode {
       return <Numbered items={block.items} />;
     case 'decision':
       return (
-        <div className="rounded-media border border-line bg-surface p-7 mobile:p-5 desktop:p-9">
+        <div className="sketch-box rounded-media border border-line bg-surface p-7 mobile:p-5 desktop:p-9">
           <h3 className="t-display-m text-balance text-ink">{block.title}</h3>
           <dl className="mt-8 grid gap-x-8 gap-y-3 min-[600px]:grid-cols-[8rem_1fr] min-[600px]:gap-y-7">
             <dt className="t-label text-ink-3">{caseChrome.decision.considered}</dt>
